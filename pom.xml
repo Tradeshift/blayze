@@ -38,6 +38,19 @@
         </dependency>
     </dependencies>
 
+    <distributionManagement>
+        <repository>
+            <id>tradeshift-upload-releases</id>
+            <name>Tradeshift Internal Releases</name>
+            <url>https://maven-upload.tradeshift.net/content/repositories/tradeshift-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>tradeshift-upload-snapshots</id>
+            <name>Tradeshift Internal Snapshots</name>
+            <url>https://maven-upload.tradeshift.net/content/repositories/tradeshift-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <build>
         <sourceDirectory>src/main/kotlin</sourceDirectory>
         <testSourceDirectory>src/test/kotlin</testSourceDirectory>
