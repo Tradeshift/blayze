@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+option java_package = "com.tradeshift.blayze";
+option java_outer_classname = "Protos";
+
+message Model {
+    map<string, uint32> priorCounts = 1;
+    map<string, Categorical> categoricalFeatures = 2;
+    map<string, Text> textFeatures = 3;
+    map<string, Gaussian> gaussianFeatures = 4;
+}
+
+message Gaussian {
+    map<string, StreamingEstimator> estimators = 1;
+}
+
+message StreamingEstimator {
+    uint32 count = 1;
+    double mean = 2;
+    double m2 = 3;
+}
+
+message Categorical {
+    Multinomial delegate = 1;
+}
+
+message Text {
+    Multinomial delegate = 1;
+}
+
+message Multinomial {
+    Table table = 1;
+    double includeFeatureProbability = 2;
+    double pseudoCount = 3;
+}
+
+message Table {
+    repeated Entry entries = 1;
+}
+
+message Entry {
+    string rowKey = 1;
+    string columnKey = 2;
+    uint32 count = 3;
+}
+
+message Inputs {
+    map<string, string> categorical = 1;
+    map<string, string> text = 2;
+    map<string, double> gaussian = 3;
+}
+
+message Update {
+    Inputs inputs = 1;
+    string outcome = 2;
+}

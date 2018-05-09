@@ -2,6 +2,7 @@
 target
 *.iml
 dependency-reduced-pom.xml
+*.DS_Store
 
 # Compiled class file
 *.class
