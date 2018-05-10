@@ -37,7 +37,21 @@ fun main(args: Array<String>) {
             }
             .average()
 
-    println("Finished, test acc=$acc")
+    println("Training and testing finished, test acc=$acc")
+
+    // have fun with model:
+    val review1 = """
+        I really don't like this new show called The Rain!
+        The directer was totally stupid and the story developed so slowly!
+    """.trimIndent()
+    println(""""$review1" -> ${model.predict(Inputs(text = mapOf("review" to review1)))}""")
+
+    // have fun with model:
+    val review2 = """
+        They have good tastes, the actress was so sweet in it.
+        I also enjoyed the fixed camera views a lot.
+    """.trimIndent()
+    println(""""$review2" -> ${model.predict(Inputs(text = mapOf("review" to review2)))}""")
 }
 
 fun getTrainTest(): Pair<Sequence<Update>, Sequence<Update>> {
