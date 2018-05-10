@@ -2,6 +2,7 @@ package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.collection.tableOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.pow
 
@@ -59,5 +60,19 @@ class TextTest {
 
         assertEquals(0.0, pP, 0.0000001)
         assertEquals(0.0, pN, 0.0000001)
+    }
+
+    @Test
+    fun test_wordcounter_bigram() {
+        val result = Text.WordCounter.countWords("aa bb cc dd", useBigram = true)
+        assertEquals(setOf("aa", "bb", "cc", "dd", "aa bb", "bb cc", "cc dd"), result.keys)
+    }
+
+    @Test
+    fun test_text_created_from_old_text_keep_useBigram_setting() {
+        val text = Text(multinomial, useBigram = true)
+        val toProto = text.batchUpdate(listOf()).toProto()  // verify the return of batchUpdate() has used the old useBigram setting
+        assertTrue(toProto.useBigram)
+        assertTrue(Text.fromProto(toProto).toProto().useBigram) // verify toProto and fromProto has used the old useBigram setting
     }
 }
