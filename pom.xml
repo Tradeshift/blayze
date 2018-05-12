@@ -6,12 +6,61 @@
 
     <groupId>com.tradeshift</groupId>
     <artifactId>blayze</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <properties>
         <kotlin.version>1.2.40</kotlin.version>
     </properties>
+
+    <name>blayze</name>
+    <description>A fast and flexible Naive Bayes implementation for the JVM written in Kotlin</description>
+    <url>https://github.com/Tradeshift/blayze</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Rasmus Berg Palm</name>
+            <email>rbp@tradeshift.com</email>
+            <organization>Tradeshift</organization>
+            <organizationUrl>http://tradeshift.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Fuyang Liu</name>
+            <email>fli@tradeshift.com</email>
+            <organization>Tradeshift</organization>
+            <organizationUrl>http://tradeshift.com</organizationUrl>
+        </developer>
+        <developer>
+            <name>Lasse Reedtz</name>
+            <email>lreedt@tradeshift.com</email>
+            <organization>Tradeshift</organization>
+            <organizationUrl>http://tradeshift.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com:Tradeshift/blayze.git</connection>
+        <developerConnection>scm:git:ssh://github.com:Tradeshift/blayze.git</developerConnection>
+        <url>https://github.com/Tradeshift/blayze/tree/master</url>
+    </scm>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh-blayze</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh-blayze</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
 
     <dependencies>
         <dependency>
@@ -38,23 +87,11 @@
         </dependency>
     </dependencies>
 
-    <distributionManagement>
-        <repository>
-            <id>tradeshift-upload-releases</id>
-            <name>Tradeshift Internal Releases</name>
-            <url>https://maven-upload.tradeshift.net/content/repositories/tradeshift-releases/</url>
-        </repository>
-        <snapshotRepository>
-            <id>tradeshift-upload-snapshots</id>
-            <name>Tradeshift Internal Snapshots</name>
-            <url>https://maven-upload.tradeshift.net/content/repositories/tradeshift-snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
-
     <build>
         <sourceDirectory>src/main/kotlin</sourceDirectory>
         <testSourceDirectory>src/test/kotlin</testSourceDirectory>
         <plugins>
+            <!-- Generate protobuf classes -->
             <plugin>
                 <groupId>com.github.os72</groupId>
                 <artifactId>protoc-jar-maven-plugin</artifactId>
@@ -129,5 +166,73 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <!-- Add sources -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>2.2.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Add javadaoc -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>2.9.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Sign artifacts-->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>1.6</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <keyname>EA03A536</keyname>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Deploy to ossrh and release to maven central -->
+                    <plugin>
+                        <groupId>org.sonatype.plugins</groupId>
+                        <artifactId>nexus-staging-maven-plugin</artifactId>
+                        <version>1.6.8</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <serverId>ossrh-blayze</serverId>
+                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
