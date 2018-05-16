@@ -105,6 +105,23 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- fail verify phase if version is already released -->
+            <plugin>
+                <groupId>org.honton.chas</groupId>
+                <artifactId>exists-maven-plugin</artifactId>
+                <version>0.0.5</version>
+                <configuration>
+                    <repository>http://central.maven.org/maven2/</repository>
+                    <failIfExists>true</failIfExists>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>remote</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <configuration>
