@@ -14,22 +14,22 @@ A fast and flexible Naive Bayes implementation for the JVM written in Kotlin.
 Get the latest artifact from [maven central](https://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.tradeshift%22%20a%3A%22blayze%22) 
 
 ````java
-Model model = new Model().batchAdd(Lists.newArrayList(new Update( //Models are immutable
-                new Inputs( // Supports multiple feature types
-                        ImmutableMap.of( //Text features
-                                "subject", "Attention, is it true?", //features are named.
-                                "body", "Good day dear beneficiary. This is Secretary to president of Benin republic is writing this email ..." // multiple features of the same type have different names
-                        ),
-                        ImmutableMap.of(  //Categorical features
-                                "sender", "WWW.@galaxy.ocn.ne.jp"
-                        ),
-                        ImmutableMap.of(  //Gaussian features
-                                "n_words", 482.
-                        )
+//Java 9
+Model model = new Model().batchAdd(List.of(new Update( //Models are immutable
+        new Inputs( // Supports multiple feature types
+                Map.of( //Text features
+                        "subject", "Attention, is it true?", //features are named.
+                        "body", "Good day dear beneficiary. This is Secretary to president of Benin republic is writing this email ..." // multiple features of the same type have different names
                 ),
-                "spam" // the outcome, in this case spam.
-        )
-));
+                Map.of( //Categorical features
+                        "sender", "WWW.@galaxy.ocn.ne.jp"
+                ),
+                Map.of( //Gaussian features
+                        "n_words", 482.
+                )
+        ),
+        "spam" // the outcome, in this case spam.
+)));
 
 Map<String, Double> predictions = model.predict(new Inputs(/*...*/));// e.g. {"spam": 0.624, "ham": 0.376}
 ````
