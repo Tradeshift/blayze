@@ -26,6 +26,7 @@ message Categorical {
 
 message Text {
     Multinomial delegate = 1;
+    bool useBigram = 2;
 }
 
 message Multinomial {
