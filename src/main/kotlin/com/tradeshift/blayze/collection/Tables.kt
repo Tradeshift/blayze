@@ -1,5 +1,10 @@
 package com.tradeshift.blayze.collection
 
+import com.google.common.collect.Interners
+import com.google.common.collect.Interner
+import java.util.HashMap
+
+
 /**
  * A table class which can be used to store and access value via a RowKey and a ColumnKey
  */
@@ -23,6 +28,10 @@ interface MutableTable<RowKey, ColumnKey, V> : Table<RowKey, ColumnKey, V> {
  * A table implementation based on a Map<Pair<RowKey, ColumnKey>, V>
  */
 class MapTable<RowKey, ColumnKey, V>(val map: Map<Pair<RowKey, ColumnKey>, V> = mapOf()) : Table<RowKey, ColumnKey, V> {
+
+    val iR = Interners.newStrongInterner<RowKey>()
+    val iC = Interners.newStrongInterner<ColumnKey>()
+
     override val entries: Set<Map.Entry<Pair<RowKey, ColumnKey>, V>> = map.entries
 
     override val rowKeySet: Set<RowKey> by lazy { // as table is immutable, we use lazy delegates to only compute the property once on first access
@@ -51,6 +60,9 @@ class MutableMapTable<RowKey, ColumnKey, V>(
         val map: MutableMap<Pair<RowKey, ColumnKey>, V> = mutableMapOf()
 ) : MutableTable<RowKey, ColumnKey, V>{
 
+    val iR = Interners.newStrongInterner<RowKey>()
+    val iC = Interners.newStrongInterner<ColumnKey>()
+
     override val entries: Set<Map.Entry<Pair<RowKey, ColumnKey>, V>>
         get() = map.entries
 
@@ -63,7 +75,7 @@ class MutableMapTable<RowKey, ColumnKey, V>(
     override operator fun get(k1: RowKey, k2: ColumnKey) = map[k1 to k2]
 
     override fun put(rowKey: RowKey, columnKey: ColumnKey, value: V) {
-        map[rowKey to columnKey] = value
+        map[iR.intern(rowKey) to iC.intern(columnKey)] = value
     }
 
     override fun toTable(): Table<RowKey, ColumnKey, V> {

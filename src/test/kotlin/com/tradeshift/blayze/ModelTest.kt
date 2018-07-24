@@ -1,3 +1,4 @@
+import com.google.common.collect.Interners
 import com.tradeshift.blayze.Model
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.tableOf
@@ -10,6 +11,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.streams.toList
+import kotlin.system.measureTimeMillis
+import org.github.jamm.MemoryMeter
+import java.io.File
+import java.lang.instrument.Instrumentation
 
 
 class ModelTest {
@@ -111,23 +116,54 @@ class ModelTest {
 
     @Test
     fun can_fit_20newsgroup() {
-        val train = newsgroup("20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.01)))).batchAdd(train)
+        var model: Model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.01))))
+        val trainingTime = measureTimeMillis {
+            val train = newsgroup("20newsgroup_train.txt")
+            model = model.batchAdd(train)
+        }
+        println("Training Time = $trainingTime ms")
 
-        val test = newsgroup("20newsgroup_test.txt")
-        val acc = test
-                .parallelStream()
-                .map {
-                    if (it.outcome == model.predict(it.inputs).maxBy { it.value }?.key) {
-                        1.0
-                    } else {
-                        0.0
+        val testingTime = measureTimeMillis {
+            val test = newsgroup("20newsgroup_test.txt")
+            val acc = test
+                    .parallelStream()
+                    .map {
+                        if (it.outcome == model.predict(it.inputs).maxBy { it.value }?.key) {
+                            1.0
+                        } else {
+                            0.0
+                        }
                     }
-                }
-                .toList()
-                .average()
+                    .toList()
+                    .average()
 
-        assertTrue(acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
+            assertTrue(acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
+
+
+        }
+        println("Testing Time = $testingTime ms")
+
+        val iR = Interners.newStrongInterner<String>()
+
+        val meter = MemoryMeter()
+        println(meter.measure(1))
+        println(meter.measureDeep(1))
+        println(meter.measure(-1))
+        println(meter.measureDeep(-1))
+        println("Long:" + meter.measureDeep((-1).toLong()))
+        println(meter.measure("hello"))
+        println(meter.measureDeep("hello"))
+        println(meter.measure("hellohello"))
+        println(meter.measureDeep("hellohello"))
+        println("try intern")
+        println(meter.measure("hellohellohellozzzddfafadfasfadfafeverrrylooooooooooooooooooooog"))
+        println(meter.measure(iR.intern("hellohellohellozzzddfafadfasfadfafeverrrylooooooooooooooooooooog")))
+        println("---")
+        println("Model size: " + (meter.measureDeep(model)).toInt() + "MB")
+        println((55/8))
+        // https://stackoverflow.com/questions/3405703/is-it-possible-to-use-java-lang-instrument-instrumentation-in-junit-tests
+
+        model.toProto().writeTo(File("model.pb").outputStream())
     }
 
 
