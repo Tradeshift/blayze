@@ -1,88 +1,124 @@
 package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.Protos
+import com.tradeshift.blayze.collection.SparseVector
 import com.tradeshift.blayze.collection.Counter
-import com.tradeshift.blayze.collection.Table
-import com.tradeshift.blayze.collection.tableOf
 import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
 import kotlin.math.pow
+
 
 /**
  * A feature for multinomial data.
  *
  * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
  * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
- * @property countTable Table with row of outcomes and column of features and the count for each occurrence e.g. {{"positive": {"awesome": 67, "terrible": 14}, "negative": {"awesome": 11, "terrible": 114}}
  */
-class Multinomial(
-        private val includeFeatureProbability: Double = 1.0,
-        private val pseudoCount: Double = 1.0,
-        private val countTable: Table<String, String, Int> = tableOf()
+class Multinomial private constructor(
+        private val includeFeatureProbability: Double,
+        private val pseudoCount: Double,
+        private val featureMap: Map<String, SparseVector>,
+        private val outcomeIndices: Map<Outcome, Int>
 ) : Feature<Multinomial, Counter<String>> {
 
-    private val outcomeCounter: Counter<String> by lazy { sumColumns(countTable) }
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 1.0) :
+            this(includeFeatureProbability, pseudoCount, mapOf(), mapOf())
+
+    private val outcomeCounts: IntArray by lazy {
+        val res = IntArray(outcomeIndices.size)
+        for (vector in featureMap.values) {
+            vector.indexed().forEach { res[it.index] += it.value }
+        }
+        res
+    }
 
     override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
-        val updatedTable = countTable.toMutableTable()
-
-        val knownFeatures = updatedTable.columnKeySet.toMutableSet()
-        for ((outcome, counts) in updates) {
-            for ((feature, value) in counts) {
-                if (knownFeatures.contains(feature) || Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(value))) {
-                    knownFeatures.add(feature)
-                    val count = updatedTable[outcome, feature] ?: 0
-                    updatedTable.put(outcome, feature, count + value)
-                }
-            }
+        val outcomesCopy = outcomeIndices.toMutableMap()
+        val featuresCopy = featureMap.toMutableMap()
+        for ((feature, counter) in invertUpdates(sampleUpdates(updates.asSequence()))) {
+            val update = counter.mapKeys { outcomesCopy.getOrPut(it.key, { outcomesCopy.size }) }
+            val vec: SparseVector = SparseVector.fromMap(update)
+            featuresCopy.compute(feature, { _, previous -> previous?.add(vec) ?: vec })
         }
-        return Multinomial(includeFeatureProbability, pseudoCount, updatedTable.toTable())
+        return Multinomial(includeFeatureProbability, pseudoCount, featuresCopy, outcomesCopy)
     }
 
     override fun logProbability(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
-        val knownFeatures: Set<String> = value.keys.intersect(countTable.columnKeySet)
-        val numOfFeatures = countTable.columnKeySet.size
-
-        val results = mutableMapOf<Outcome, Double>()
-        for (outcome in outcomes) {
-            var logProb = 0.0
-            for (feature in knownFeatures) {
-                val count = ((countTable[outcome, feature] ?: 0) + pseudoCount)
-                logProb += value[feature] * (ln(count) - ln(outcomeCounter[outcome] + (numOfFeatures * pseudoCount)))
+        val logCounts = DoubleArray(outcomeIndices.size)
+        val nonZeroCounts = IntArray(outcomeIndices.size)
+        var nFeatures = 0
+        for ((feature, featureCount) in value) {
+            val vector = featureMap[feature]
+            if (vector != null) {
+                nFeatures += featureCount
+                vector.indexed().forEach { (idx, value) ->
+                    nonZeroCounts[idx] += featureCount
+                    logCounts[idx] += ln(value + pseudoCount) * featureCount
+                }
             }
-            results[outcome] = logProb
         }
-        return results
+
+        fun logProbZeros(nonZeroCount: Int): Double = (nFeatures - nonZeroCount) * ln(pseudoCount)
+        fun logProbDenominator(outcomeCount: Int) =  nFeatures * ln(outcomeCount + featureMap.size * pseudoCount)
+
+        return outcomes.map { outcome ->
+            val idx = outcomeIndices[outcome]
+            val logProb = if (idx != null) {
+                logCounts[idx] + logProbZeros(nonZeroCounts[idx]) - logProbDenominator(outcomeCounts[idx])
+            } else {
+                // Unseen outcomes have only zero values
+                logProbZeros(nonZeroCount = 0) - logProbDenominator(0)
+            }
+            outcome to logProb
+        }.toMap()
     }
 
-    private fun sumColumns(table: Table<String, String, Int>): Counter<String> {
-        val counts = mutableMapOf<String, Int>()
-        for (cell in table.entries) {
-            val outcome = cell.key.first
-            val current = counts.getOrDefault(outcome, 0)
-            counts[outcome] = current + cell.value
+    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
+        fun shouldSampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
+        val knownFeatures = featureMap.keys.toMutableSet()
+        return updates.map { (outcome, counts) ->
+            val filteredCounts = counts.filter { it.key in knownFeatures || shouldSampleFeature(it.value) }
+            knownFeatures.addAll(filteredCounts.keys)
+            outcome to Counter(filteredCounts)
         }
-        return Counter(counts)
+    }
+
+    private fun invertUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> =
+            group(updates.asSequence().flatMap { (o, cnt) -> cnt.map { Triple(it.key, o, it.value) }.asSequence() })
+
+    private fun entries(): Iterable<Protos.Entry> {
+        val idxToOutcome = this.outcomeIndices.map { (k, v) -> v to k }.toMap()
+        return featureMap.asSequence().flatMap { (feature, outcomeVec) ->
+            outcomeVec.indexed().asSequence().map {
+                Protos.Entry.newBuilder()
+                        .setRowKey(idxToOutcome[it.index]!!)
+                        .setColumnKey(feature)
+                        .setCount(it.value)
+                        .build()
+            }
+        }.asIterable()
     }
 
     fun toProto(): Protos.Multinomial {
         return Protos.Multinomial.newBuilder()
                 .setIncludeFeatureProbability(includeFeatureProbability)
                 .setPseudoCount(pseudoCount)
-                .setTable(Protos.Table.newBuilder()
-                        .addAllEntries(countTable.entries.map {
-                            Protos.Entry.newBuilder()
-                                    .setRowKey(it.key.first)
-                                    .setColumnKey(it.key.second)
-                                    .setCount(it.value)
-                                    .build()
-                        }).build()
-                ).build()
+                .setTable(Protos.Table.newBuilder().addAllEntries(entries()).build())
+                .build()
     }
 
     companion object {
         fun fromProto(proto: Protos.Multinomial): Multinomial {
-            return Multinomial(proto.includeFeatureProbability, proto.pseudoCount, tableOf(proto.table.entriesList.map { Pair(Pair(it.rowKey, it.columnKey), it.count) }))
+            val updates = group(proto.table.entriesList.asSequence().map { Triple(it.rowKey, it.columnKey, it.count) })
+            return Multinomial(proto.includeFeatureProbability, proto.pseudoCount).batchUpdate(updates.toList())
         }
     }
 }
+
+private fun group(updates: Sequence<Triple<String, String, Int>>): Map<String, Counter<String>> = updates
+        .groupingBy { it.first }
+        .fold({ _, _ -> mutableMapOf<String, Int>() }) { _, counter, triple ->
+            counter[triple.second] = (counter[triple.second] ?: 0) + triple.third
+            counter
+        }
+        .mapValues { Counter(it.value) }

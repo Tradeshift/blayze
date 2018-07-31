@@ -1,17 +1,15 @@
 package com.tradeshift.blayze.features
 
-import com.tradeshift.blayze.collection.tableOf
+import com.tradeshift.blayze.collection.Counter
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CategoricalTest {
 
-    private val multinomial = Multinomial(
-            countTable = tableOf(
-                    "p" to "ole" to 1,
-                    "n" to "ole" to 1,
-                    "n" to "bob" to 1,
-                    "n" to "ada" to 1
+    private val multinomial = Multinomial().batchUpdate(
+            listOf(
+                    "p" to Counter("ole"),
+                    "n" to Counter("ole", "bob", "ada")
             )
     )
 

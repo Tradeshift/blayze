@@ -1,20 +1,16 @@
 package com.tradeshift.blayze.features
 
-import com.tradeshift.blayze.collection.tableOf
+import com.tradeshift.blayze.collection.Counter
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.math.pow
 
 class TextTest {
 
-    private val multinomial = Multinomial(
-            countTable = tableOf(
-                    "p" to "awesome" to 7,
-                    "p" to "terrible" to 3,
-                    "p" to "ok" to 19,
-                    "n" to "awesome" to 2,
-                    "n" to "terrible" to 13,
-                    "n" to "ok" to 21
+    private val multinomial = Multinomial().batchUpdate(
+            listOf(
+                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
             )
     )
 
