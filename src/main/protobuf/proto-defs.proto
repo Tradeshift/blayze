@@ -29,9 +29,22 @@ message Text {
 }
 
 message Multinomial {
-    Table table = 1;
+    oneof count_table {
+        Table table = 1 [deprecated = true];
+        SparseTable sparseTable = 4;
+    }
     double includeFeatureProbability = 2;
     double pseudoCount = 3;
+}
+
+message SparseTable {
+    map<string, uint32> outcomes = 1;
+    map<string, SparseVector> featureMap = 2;
+}
+
+message SparseVector {
+    repeated uint32 indices = 1;
+    repeated uint32 values = 2;
 }
 
 message Table {

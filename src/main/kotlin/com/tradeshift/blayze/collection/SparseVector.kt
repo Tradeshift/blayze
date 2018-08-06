@@ -1,5 +1,6 @@
 package com.tradeshift.blayze.collection
 
+import com.tradeshift.blayze.Protos
 import java.util.TreeMap
 
 class SparseVector private constructor(private val indices: IntArray, private val values: IntArray) {
@@ -15,10 +16,16 @@ class SparseVector private constructor(private val indices: IntArray, private va
         return indices.asSequence().withIndex().map { (cursor, idx) -> IndexedValue(idx, values[cursor]) }.iterator()
     }
 
+    fun toProto(): Protos.SparseVector = Protos.SparseVector.newBuilder()
+            .addAllIndices(indices.asIterable()).addAllValues(values.asIterable()).build()
+
     companion object {
         fun fromMap(map: Map<Int, Int>): SparseVector {
             val sortedNonZeros = map.filter { it.value != 0 }.toSortedMap()
             return SparseVector(sortedNonZeros.keys.toIntArray(), sortedNonZeros.values.toIntArray())
         }
+
+        fun fromProto(proto: Protos.SparseVector): SparseVector =
+                SparseVector(proto.indicesList.toIntArray(), proto.valuesList.toIntArray())
     }
 }

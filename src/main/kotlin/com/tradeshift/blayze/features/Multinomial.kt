@@ -86,31 +86,28 @@ class Multinomial private constructor(
     private fun invertUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> =
             group(updates.asSequence().flatMap { (o, cnt) -> cnt.map { Triple(it.key, o, it.value) }.asSequence() })
 
-    private fun entries(): Iterable<Protos.Entry> {
-        val idxToOutcome = this.outcomeIndices.map { (k, v) -> v to k }.toMap()
-        return featureMap.asSequence().flatMap { (feature, outcomeVec) ->
-            outcomeVec.indexed().asSequence().map {
-                Protos.Entry.newBuilder()
-                        .setRowKey(idxToOutcome[it.index]!!)
-                        .setColumnKey(feature)
-                        .setCount(it.value)
-                        .build()
-            }
-        }.asIterable()
-    }
-
     fun toProto(): Protos.Multinomial {
         return Protos.Multinomial.newBuilder()
                 .setIncludeFeatureProbability(includeFeatureProbability)
                 .setPseudoCount(pseudoCount)
-                .setTable(Protos.Table.newBuilder().addAllEntries(entries()).build())
+                .setSparseTable(
+                        Protos.SparseTable.newBuilder()
+                                .putAllOutcomes(outcomeIndices)
+                                .putAllFeatureMap(featureMap.mapValues { it.value.toProto() })
+                                .build()
+                )
                 .build()
     }
 
     companion object {
         fun fromProto(proto: Protos.Multinomial): Multinomial {
-            val updates = group(proto.table.entriesList.asSequence().map { Triple(it.rowKey, it.columnKey, it.count) })
-            return Multinomial(proto.includeFeatureProbability, proto.pseudoCount).batchUpdate(updates.toList())
+            return if (proto.hasSparseTable()) {
+                val featureMap = proto.sparseTable.featureMapMap.mapValues { SparseVector.fromProto(it.value) }
+                Multinomial(proto.includeFeatureProbability, proto.pseudoCount, featureMap, proto.sparseTable.outcomesMap)
+            } else {
+                val updates = group(proto.table.entriesList.asSequence().map { Triple(it.rowKey, it.columnKey, it.count) })
+                Multinomial(proto.includeFeatureProbability, proto.pseudoCount).batchUpdate(updates.toList())
+            }
         }
     }
 }

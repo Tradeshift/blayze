@@ -44,6 +44,28 @@ class ModelTest {
     }
 
     @Test
+    fun multinomial_deserialization_is_backwards_compatible() {
+        val table = Protos.Table.newBuilder()
+                .addEntries(Protos.Entry.newBuilder().setRowKey("p").setColumnKey("a").setCount(1).build())
+                .addEntries(Protos.Entry.newBuilder().setRowKey("p").setColumnKey("b").setCount(10).build())
+                .addEntries(Protos.Entry.newBuilder().setRowKey("n").setColumnKey("a").setCount(2).build())
+                .build()
+
+        val oldProto = Protos.Multinomial.newBuilder()
+                .setPseudoCount(1.0).setIncludeFeatureProbability(1.0).setTable(table).build()
+
+        val sample = Counter(mapOf("a" to 3, "b" to 7, "c" to 3))
+        val deserializedPrediction = Multinomial.fromProto(oldProto).logProbability(setOf("p", "n"), sample)
+        val prediction = Multinomial(1.0, 1.0).batchUpdate(listOf(
+                "p" to Counter(mapOf("a" to 1, "b" to 10)),
+                "n" to Counter(mapOf("a" to 2))
+        )).logProbability(setOf("p", "n"), sample)
+
+        assertEquals(prediction["p"]!!, deserializedPrediction["p"]!!, 0.0000001)
+        assertEquals(prediction["n"]!!, deserializedPrediction["n"]!!, 0.0000001)
+    }
+
+    @Test
     fun gaussian_features_can_be_serialized_and_deserialized() {
         val model = Model().batchAdd(
                 listOf(
