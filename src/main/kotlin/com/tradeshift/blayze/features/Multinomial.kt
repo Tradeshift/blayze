@@ -23,7 +23,6 @@ class Multinomial(
         val newSparseTable: SparseTable = sparseTable
                 .add(invertUpdates(sampleUpdates(updates.asSequence())).map { it.key to it.value }.asSequence())
         return Multinomial(includeFeatureProbability, pseudoCount, newSparseTable)
-
     }
 
     override fun logProbability(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
@@ -47,8 +46,16 @@ class Multinomial(
         }
     }
 
-    private fun invertUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> =
-            group(updates.asSequence().flatMap { (o, cnt) -> cnt.map { Triple(it.key, o, it.value) }.asSequence() })
+    private fun invertUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> {
+        val flipped = HashMap<String, HashMap<Outcome, Int>>()
+        for ((outcome, counter) in updates) {
+            for ((feature, count) in counter) {
+                val outcomeCounter = flipped.getOrPut(feature, { HashMap() })
+                outcomeCounter[outcome] = count + (outcomeCounter[outcome] ?: 0)
+            }
+        }
+        return flipped.mapValues { Counter(it.value) }
+    }
 
     fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
             .setIncludeFeatureProbability(includeFeatureProbability)
@@ -57,21 +64,10 @@ class Multinomial(
             .build()
 
     companion object {
-        fun fromProto(proto: Protos.Multinomial): Multinomial {
-            return if (proto.hasSparseTable()) {
-                Multinomial(proto.includeFeatureProbability, proto.pseudoCount, SparseTable.fromProto(proto.sparseTable))
-            } else {
-                val updates = group(proto.table.entriesList.asSequence().map { Triple(it.rowKey, it.columnKey, it.count) })
-                Multinomial(proto.includeFeatureProbability, proto.pseudoCount).batchUpdate(updates.toList())
-            }
+        fun fromProto(proto: Protos.Multinomial): Multinomial  {
+            if (!proto.hasSparseTable()) throw RuntimeException("Multinomial proto has no SparseTable set")
+            val sparseTable = SparseTable.fromProto(proto.sparseTable)
+            return Multinomial(proto.includeFeatureProbability, proto.pseudoCount, sparseTable)
         }
     }
 }
-
-private fun group(updates: Sequence<Triple<String, String, Int>>): Map<String, Counter<String>> = updates
-        .groupingBy { it.first }
-        .fold({ _, _ -> mutableMapOf<String, Int>() }) { _, counter, triple ->
-            counter[triple.second] = (counter[triple.second] ?: 0) + triple.third
-            counter
-        }
-        .mapValues { Counter(it.value) }

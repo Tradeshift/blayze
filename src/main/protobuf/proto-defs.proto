@@ -29,12 +29,11 @@ message Text {
 }
 
 message Multinomial {
-    oneof count_table {
-        Table table = 1 [deprecated = true];
-        SparseTable sparseTable = 4;
-    }
+    SparseTable sparseTable = 4;
     double includeFeatureProbability = 2;
     double pseudoCount = 3;
+
+    reserved 1;
 }
 
 message SparseTable {
@@ -45,16 +44,6 @@ message SparseTable {
 message SparseVector {
     repeated uint32 indices = 1;
     repeated uint32 values = 2;
-}
-
-message Table {
-    repeated Entry entries = 1;
-}
-
-message Entry {
-    string rowKey = 1;
-    string columnKey = 2;
-    uint32 count = 3;
 }
 
 message Inputs {
