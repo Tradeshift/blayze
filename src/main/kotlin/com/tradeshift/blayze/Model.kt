@@ -56,6 +56,7 @@ class Model(
 
     fun toProto(): Protos.Model {
         return Protos.Model.newBuilder()
+                .setModelVersion(Model.version)
                 .putAllPriorCounts(priorCounts)
                 .putAllTextFeatures(textFeatures.mapValues { it.value.toProto() })
                 .putAllCategoricalFeatures(categoricalFeatures.mapValues { it.value.toProto() })
@@ -63,7 +64,14 @@ class Model(
                 .build()
     }
     companion object {
+
+        private val version = 2
+
         fun fromProto(proto: Protos.Model): Model {
+            if (proto.modelVersion != version) {
+                throw IllegalArgumentException("This version of blayze requires protobuf model version $version " +
+                                "Attempted to load protobuf with version ${proto.modelVersion}")
+            }
             return Model(
                     proto.priorCountsMap,
                     proto.textFeaturesMap.mapValues { Text.fromProto(it.value) },

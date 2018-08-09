@@ -43,6 +43,14 @@ class ModelTest {
         assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
     }
 
+
+    @Test(expected = IllegalArgumentException::class)
+    fun fails_to_deserialize_proto_with_different_version() {
+        val proto = model.toProto()
+        val differentVersionProto = Protos.Model.newBuilder(proto).setModelVersion(proto.modelVersion - 1).build()
+        Model.fromProto(differentVersionProto)
+    }
+
     @Test
     fun gaussian_features_can_be_serialized_and_deserialized() {
         val model = Model().batchAdd(
