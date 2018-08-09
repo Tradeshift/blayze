@@ -29,19 +29,15 @@ message Text {
 }
 
 message Multinomial {
-    SparseTable sparseTable = 4;
     double includeFeatureProbability = 2;
     double pseudoCount = 3;
+    map<string, uint32> outcomes = 4;
+    map<string, SparseIntVector> features = 5;
 
     reserved 1;
 }
 
-message SparseTable {
-    map<string, uint32> outcomes = 1;
-    map<string, SparseVector> featureMap = 2;
-}
-
-message SparseVector {
+message SparseIntVector {
     repeated uint32 indices = 1;
     repeated uint32 values = 2;
 }

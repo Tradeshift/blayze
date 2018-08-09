@@ -2,7 +2,7 @@ package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.Counter
-import com.tradeshift.blayze.collection.SparseTable
+import com.tradeshift.blayze.collection.SparseIntVector
 import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
 import kotlin.math.pow
@@ -12,37 +12,98 @@ import kotlin.math.pow
  *
  * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
  * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
+ * @property outcomeIndices Mapping between an outcome and its index in a SparseIntVector.
+ * @param features Mapping from features to sparse vectors representing the outcome counts for the feature.
  */
-class Multinomial(
+class Multinomial private constructor(
         private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
-        private val sparseTable: SparseTable = SparseTable()
+        private val outcomeIndices: Map<Outcome, Int>,
+        private val features: Map<String, SparseIntVector>
 ) : Feature<Multinomial, Counter<String>> {
 
+    /**
+     * A feature for multinomial data.
+     *
+     * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
+     * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
+     */
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 1.0) :
+            this(includeFeatureProbability, pseudoCount, HashMap(), HashMap())
+
+    /**
+     * Sum of the counts
+     */
+    private val nFeaturesPerOutcome: IntArray by lazy {
+        val res = IntArray(outcomeIndices.size)
+        for (vec in features.values) {
+            for ((idx, count) in vec) {
+                res[idx] += count
+            }
+        }
+        res
+    }
+
     override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
-        val newSparseTable: SparseTable = sparseTable
-                .add(invertUpdates(sampleUpdates(updates.asSequence())).map { it.key to it.value }.asSequence())
-        return Multinomial(includeFeatureProbability, pseudoCount, newSparseTable)
+        val featuresCopy = features.toMutableMap()
+        val outcomesCopy = outcomeIndices.toMutableMap()
+
+        fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key, { outcomesCopy.size })
+
+        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence()))
+        for ((feature, counter) in formattedUpdates) {
+            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key)  }
+            val vec = SparseIntVector.fromMap(indexToUpdate)
+            featuresCopy[feature] = featuresCopy[feature]?.add(vec) ?: vec
+        }
+        return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
     }
 
     override fun logProbability(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
-        fun logNumerator(v: Int) = ln(v + pseudoCount)
-        fun logDenominator(v: Int) = ln(v + sparseTable.features.size * pseudoCount)
+        // sum all log probabilities for non-zero feature-outcome combinations
+        val nonZeroLogProbs = DoubleArray(outcomeIndices.size)
+        val nonZeroCounts = IntArray(outcomeIndices.size)
+        var nFeatures = 0
+        for ((feature, count) in value) {
+            val vector = features[feature]
+            if (vector != null) {
+                nFeatures += count
+                for ((idx, v) in vector) {
+                    nonZeroLogProbs[idx] += count * logProbability(v, nFeaturesPerOutcome[idx])
+                    nonZeroCounts[idx] += count
+                }
+            }
+        }
 
-        val nFeatures = value.filterKeys(sparseTable.features::contains).values.sum()
-        val logProbs = sparseTable
-                .sumRows(value, ::logNumerator)
-                .mapValues { it.value - nFeatures * logDenominator(sparseTable.sumRows[it.key]!!) }
-        return outcomes.map { it to (logProbs[it] ?: nFeatures * (logNumerator(0)- logDenominator(0))) }.toMap()
+        // then compute log probabilities for zero valued feature-outcome combinations
+        val zeroLogProbs = nonZeroCounts.mapIndexed { idx, nonZeroCount ->
+            val zeroCount = nFeatures - nonZeroCount
+            zeroCount * logProbability(0, nFeaturesPerOutcome[idx])
+        }
+
+        return outcomes.map { outcome ->
+            val idx = outcomeIndices[outcome]
+            val logProb = if (idx != null)
+                nonZeroLogProbs[idx] + zeroLogProbs[idx]
+            else {
+                // unseen outcomeIndices have zero counts
+                nFeatures * logProbability(0, 0)
+            }
+            outcome to logProb
+        }.toMap()
+    }
+
+    private fun logProbability(numerator: Int, denominator: Int): Double {
+        return ln(numerator + pseudoCount) - ln(denominator + features.size * pseudoCount)
     }
 
     private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
-        fun shouldSampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
-        val knownFeatures = sparseTable.features.toMutableSet()
-        return updates.map { (outcome, counts) ->
-            val filteredCounts = counts.filter { it.key in knownFeatures || shouldSampleFeature(it.value) }
-            knownFeatures.addAll(filteredCounts.keys)
-            outcome to Counter(filteredCounts)
+        fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
+        val knownFeatures = features.keys.toMutableSet()
+        return updates.map { (outcome, counter) ->
+            val filteredFeatures = counter.filter { it.key in knownFeatures || sampleFeature(it.value) }
+            knownFeatures.addAll(filteredFeatures.keys)
+            outcome to Counter(filteredFeatures)
         }
     }
 
@@ -60,14 +121,15 @@ class Multinomial(
     fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
             .setIncludeFeatureProbability(includeFeatureProbability)
             .setPseudoCount(pseudoCount)
-            .setSparseTable(sparseTable.toProto())
+            .putAllOutcomes(outcomeIndices)
+            .putAllFeatures(features.mapValues { it.value.toProto() })
             .build()
 
     companion object {
-        fun fromProto(proto: Protos.Multinomial): Multinomial  {
-            if (!proto.hasSparseTable()) throw RuntimeException("Multinomial proto has no SparseTable set")
-            val sparseTable = SparseTable.fromProto(proto.sparseTable)
-            return Multinomial(proto.includeFeatureProbability, proto.pseudoCount, sparseTable)
-        }
+        fun fromProto(proto: Protos.Multinomial) = Multinomial(
+                proto.includeFeatureProbability,
+                proto.pseudoCount,
+                proto.outcomesMap,
+                proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) })
     }
 }
