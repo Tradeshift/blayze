@@ -335,6 +335,28 @@ class ModelTest {
     }
 
     @Test
+    fun multiple_features() {
+        val textInputA = Inputs(text = mapOf("feature_A" to "this this this", "feature_B" to "that that that"))
+        val textInputB = Inputs(text = mapOf("feature_A" to "that that that", "feature_B" to "this this this"))
+
+        val model = Model()
+                .batchAdd(
+                        listOf(
+                                Update(textInputA, "A"),
+                                Update(textInputA, "A"),
+                                Update(textInputA, "A"),
+                                Update(textInputB, "B"),
+                                Update(textInputB, "B"),
+                                Update(textInputB, "B")
+                        )
+                )
+        val prediction = model.predict(textInputA)
+        // This does not make sense:
+        assertEquals(0.5, prediction["A"]!!, 0.0000001)
+        assertEquals(0.5, prediction["B"]!!, 0.0000001)
+    }
+
+    @Test
     fun unseen_features_default_to_prior() {
         val suggestions = model.predict(Inputs(
                 mapOf(Pair("q", "k k k k k k k k k k k k k k k k k")),
