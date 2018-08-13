@@ -7,14 +7,6 @@ import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
 import kotlin.math.pow
 
-/**
- * A feature for multinomial data.
- *
- * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
- * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
- * @property outcomeIndices Mapping between an outcome and its index in a SparseIntVector.
- * @param features Mapping from features to sparse vectors representing the outcome counts for the feature.
- */
 class Multinomial private constructor(
         private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
@@ -32,7 +24,7 @@ class Multinomial private constructor(
             this(includeFeatureProbability, pseudoCount, HashMap(), HashMap())
 
     /**
-     * Sum of the counts
+     * The number of features seen for each outcome
      */
     private val nFeaturesPerOutcome: IntArray by lazy {
         val res = IntArray(outcomeIndices.size)
@@ -59,6 +51,26 @@ class Multinomial private constructor(
         return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
     }
 
+    /**
+     * The unnormalized log probability for each outcome, which is defined as:
+     *
+     *      logProb_o = sum_f(log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
+     *
+     * where sum_f is a sum over all input features, S_of is the number of times feature f has been seen with outcome o,
+     * and sum_i is a sum over all seen features.
+     *
+     * In the case where the count matrix S_cf is sparse this computation will be dominated by zero values. To retain
+     * performance in this case this implementation reduces the number of computations required by separating
+     * the calculation of zero-valued entries of S and non-zero entries:
+     *
+     *      logProb_o = sum_fnonzero((log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
+     *                  + sum_fzero((log(0 + pseudoCount) - log(sum_i(S_oi + pseudoCount))
+     *
+     *                = sum_fnonzero((log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
+     *                  + sum_fzero(1) * (log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
+     *
+     * The second term only needs to be computed once instead of summing over all input features.
+     */
     override fun logProbability(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
         // sum all log probabilities for non-zero feature-outcome combinations
         val nonZeroLogProbs = DoubleArray(outcomeIndices.size)
