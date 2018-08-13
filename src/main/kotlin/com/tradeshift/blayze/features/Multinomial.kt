@@ -5,6 +5,7 @@ import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.collection.SparseIntVector
 import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
+import kotlin.math.max
 import kotlin.math.pow
 
 class Multinomial private constructor(
@@ -106,7 +107,7 @@ class Multinomial private constructor(
     }
 
     private fun logProbability(numerator: Int, denominator: Int): Double {
-        return ln(numerator + pseudoCount) - ln(denominator + features.size * pseudoCount)
+        return ln(numerator + pseudoCount) - ln(denominator + max(features.size, 1) * pseudoCount)
     }
 
     private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
