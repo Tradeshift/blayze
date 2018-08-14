@@ -1,6 +1,6 @@
 import com.tradeshift.blayze.Model
 import com.tradeshift.blayze.Protos
-import com.tradeshift.blayze.collection.tableOf
+import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Categorical
@@ -41,6 +41,14 @@ class ModelTest {
 
         assertEquals(0.9268899, suggestions["p"]!!, 0.0000001)
         assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
+    }
+
+
+    @Test(expected = IllegalArgumentException::class)
+    fun fails_to_deserialize_proto_with_different_version() {
+        val proto = model.toProto()
+        val differentVersionProto = Protos.Model.newBuilder(proto).setModelVersion(proto.modelVersion - 1).build()
+        Model.fromProto(differentVersionProto)
     }
 
     @Test
@@ -372,31 +380,26 @@ class ModelTest {
                             Text(
                                     Multinomial(
                                             1.0,
-                                            1.0,
-                                            tableOf(
-                                                    "p" to "awesome" to 7,
-                                                    "p" to "terrible" to 3,
-                                                    "p" to "ok" to 19,
-                                                    "n" to "awesome" to 2,
-                                                    "n" to "terrible" to 13,
-                                                    "n" to "ok" to 21
+                                            1.0
+                                    ).batchUpdate(
+                                            listOf(
+                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
                                             )
                                     )
                             )
+
                     ),
                     Pair(
                             "other_q",
                             Text(
                                     Multinomial(
                                             1.0,
-                                            1.0,
-                                            tableOf(
-                                                    "p" to "awesome" to 7,
-                                                    "p" to "terrible" to 3,
-                                                    "p" to "ok" to 19,
-                                                    "n" to "awesome" to 2,
-                                                    "n" to "terrible" to 13,
-                                                    "n" to "ok" to 21
+                                            1.0
+                                    ).batchUpdate(
+                                            listOf(
+                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
                                             )
                                     )
                             )
@@ -407,26 +410,25 @@ class ModelTest {
                     Categorical(
                             Multinomial(
                                     1.0,
-                                    1.0,
-                                    tableOf(
-                                            "p" to "ole" to 1,
-                                            "n" to "ole" to 1,
-                                            "n" to "bob" to 1,
-                                            "n" to "ada" to 1
+                                    1.0
+                            ).batchUpdate(
+                                    listOf(
+                                            "p" to Counter("ole"),
+                                            "n" to Counter("ole", "bob", "ada")
                                     )
                             )
                     )
-
             ),
                     Pair(
                             "contry",
                             Categorical(
                                     Multinomial(
                                             1.0,
-                                            1.0,
-                                            tableOf(
-                                                    "p" to "utopia" to 1,
-                                                    "n" to "dystopia" to 1
+                                            1.0
+                                    ).batchUpdate(
+                                            listOf(
+                                                    "p" to Counter("utopia"),
+                                                    "n" to Counter("dystopia")
                                             )
                                     )
                             )
