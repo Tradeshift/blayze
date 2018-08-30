@@ -7,12 +7,13 @@ import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.pow
+import kotlinx.collections.immutable.*
 
 class Multinomial private constructor(
         private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
         private val outcomeIndices: Map<Outcome, Int>,
-        private val features: Map<String, SparseIntVector>
+        private val features: ImmutableMap<String, SparseIntVector>
 ) : Feature<Multinomial, Counter<String>> {
 
     /**
@@ -22,7 +23,7 @@ class Multinomial private constructor(
      * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
      */
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 1.0) :
-            this(includeFeatureProbability, pseudoCount, HashMap(), HashMap())
+            this(includeFeatureProbability, pseudoCount, HashMap(), immutableHashMapOf())
 
     /**
      * The number of features seen for each outcome
@@ -38,16 +39,17 @@ class Multinomial private constructor(
     }
 
     override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
-        val featuresCopy = features.toMutableMap()
         val outcomesCopy = outcomeIndices.toMutableMap()
+        var featuresCopy = features
 
         fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key, { outcomesCopy.size })
 
-        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence()))
+        val formattedUpdates = invertUpdates(sampleUpdates(updates))
         for ((feature, counter) in formattedUpdates) {
-            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key)  }
+            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
             val vec = SparseIntVector.fromMap(indexToUpdate)
-            featuresCopy[feature] = featuresCopy[feature]?.add(vec) ?: vec
+            val newVec = featuresCopy[feature]?.add(vec) ?: vec
+            featuresCopy = featuresCopy.put(feature, newVec)
         }
         return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
     }
@@ -110,17 +112,18 @@ class Multinomial private constructor(
         return ln(numerator + pseudoCount) - ln(denominator + max(features.size, 1) * pseudoCount)
     }
 
-    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
+    private fun sampleUpdates(updates: List<Pair<Outcome, Counter<String>>>): List<Pair<Outcome, Counter<String>>> {
         fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
-        val knownFeatures = features.keys.toMutableSet()
+        val knownFeatures = features.keys
+        val newFeatures = mutableSetOf<String>()
         return updates.map { (outcome, counter) ->
-            val filteredFeatures = counter.filter { it.key in knownFeatures || sampleFeature(it.value) }
-            knownFeatures.addAll(filteredFeatures.keys)
+            val filteredFeatures = counter.filter { (it.key in knownFeatures || it.key in newFeatures) || sampleFeature(it.value) }
+            newFeatures.addAll(filteredFeatures.keys.minus(knownFeatures))
             outcome to Counter(filteredFeatures)
         }
     }
 
-    private fun invertUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> {
+    private fun invertUpdates(updates: List<Pair<Outcome, Counter<String>>>): Map<String, Counter<Outcome>> {
         val flipped = HashMap<String, HashMap<Outcome, Int>>()
         for ((outcome, counter) in updates) {
             for ((feature, count) in counter) {
@@ -143,6 +146,6 @@ class Multinomial private constructor(
                 proto.includeFeatureProbability,
                 proto.pseudoCount,
                 proto.outcomesMap,
-                proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) })
+                proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) }.toImmutableHashMap())
     }
 }
