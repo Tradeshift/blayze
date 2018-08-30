@@ -182,8 +182,8 @@ class MutableModel(
         val values = updates.map { extractor(it.inputs) }
 
         val data: Map<FeatureName, List<Pair<Outcome, V>>> = zipOutcomesAndValues(outcomes, values)
-        for ((name, pairs) in data) {
-            features.getOrPut(name, creator).batchUpdate(pairs)
+        data.toList().parallelStream().forEach {
+            features.getOrPut(it.first, creator).batchUpdate(it.second)
         }
     }
 
