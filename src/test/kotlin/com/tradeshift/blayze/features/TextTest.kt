@@ -7,12 +7,17 @@ import kotlin.math.pow
 
 class TextTest {
 
-    private val multinomial = Multinomial().batchUpdate(
-            listOf(
-                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
-                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
-            )
-    )
+    private val multinomial: Multinomial
+        get() {
+            val mutable = MutableMultinomial()
+            mutable.batchUpdate(
+                    listOf(
+                            "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                            "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
+                    ))
+            return mutable.toFeature()
+        }
+
 
     @Test
     fun return_right_log_proberbility() {
@@ -30,15 +35,17 @@ class TextTest {
 
     @Test
     fun test_batch_update() {
-        val text = Text(Multinomial())
+        val mutable = MutableText(MutableMultinomial())
+        mutable
                 .batchUpdate(listOf(
                         "p" to "awesome awesome awesome awesome awesome awesome awesome",
                         "p" to "ok ok ok ok ok ok ok ok ok ok terrible terrible terrible ",
                         "n" to "awesome awesome ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok"))
-                .batchUpdate(listOf(
-                        "p" to "ok ok ok ok ok ok ok ok ok",
-                        "n" to "ok ok ok ok ok ok terrible terrible terrible terrible",
-                        "n" to "terrible terrible terrible terrible terrible terrible terrible terrible terrible"))
+        mutable.batchUpdate(listOf(
+                "p" to "ok ok ok ok ok ok ok ok ok",
+                "n" to "ok ok ok ok ok ok terrible terrible terrible terrible",
+                "n" to "terrible terrible terrible terrible terrible terrible terrible terrible terrible"))
+        val text = mutable.toFeature()
 
         val pP = text.logProbability(setOf("p"), "awesome awesome awesome ok")["p"]!!
         val pN = text.logProbability(setOf("n"), "awesome awesome awesome ok")["n"]!!

@@ -4,10 +4,7 @@ import com.tradeshift.blayze.dto.FeatureName
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.dto.Update
-import com.tradeshift.blayze.features.Categorical
-import com.tradeshift.blayze.features.Feature
-import com.tradeshift.blayze.features.Gaussian
-import com.tradeshift.blayze.features.Text
+import com.tradeshift.blayze.features.*
 
 /**
  * A flexible and robust naive bayes classifier that supports multiple features of multiple types, and iterative updating.
@@ -63,6 +60,16 @@ class Model(
                 .putAllGaussianFeatures(gaussianFeatures.mapValues { it.value.toProto() })
                 .build()
     }
+
+    fun toMutableModel(): MutableModel {
+        return MutableModel(
+                priorCounts.toMutableMap(),
+                textFeatures.mapValues { it.value.toMutableFeature() }.toMutableMap(),
+                categoricalFeatures.mapValues { it.value.toMutableFeature() }.toMutableMap(),
+                gaussianFeatures.mapValues { it.value.toMutableFeature() }.toMutableMap()
+        )
+    }
+
     companion object {
 
         private val version = 2
@@ -70,7 +77,7 @@ class Model(
         fun fromProto(proto: Protos.Model): Model {
             if (proto.modelVersion != version) {
                 throw IllegalArgumentException("This version of blayze requires protobuf model version $version " +
-                                "Attempted to load protobuf with version ${proto.modelVersion}")
+                        "Attempted to load protobuf with version ${proto.modelVersion}")
             }
             return Model(
                     proto.priorCountsMap,
@@ -101,30 +108,7 @@ class Model(
         return normalize(sumMaps(maps))
     }
 
-    /**
-     * Creates a new model with the [Update]s added.
-     */
-    fun add(update: Update): Model {
-        return batchAdd(listOf(update))
-    }
-
-    /**
-     * Creates a new model with the updates added.
-     *
-     * @param updates List of observed updates
-     * @return new updated Model
-     */
-    fun batchAdd(updates: List<Update>): Model {
-        val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
-
-        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical })
-        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text })
-        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian })
-
-        return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures)
-    }
-
-    private fun <F, V> logProbabilities(features: Map<FeatureName, Feature<F, V>>, values: Map<FeatureName, V>): List<Map<Outcome, Double>> {
+    private fun <V> logProbabilities(features: Map<FeatureName, Feature<V>>, values: Map<FeatureName, V>): List<Map<Outcome, Double>> {
         return values.map { (key, value) -> features[key]?.logProbability(logPrior.keys, value) }.filterNotNull()
     }
 
@@ -147,22 +131,60 @@ class Model(
     }
 
 
-    private fun <V, F : Feature<F, V>> updateFeatures(
-            old: Map<FeatureName, F>,
+}
+
+
+class MutableModel(
+        private val priorCounts: MutableMap<Outcome, Int> = hashMapOf(),
+        private val textFeatures: MutableMap<FeatureName, MutableText> = hashMapOf(),
+        private val categoricalFeatures: MutableMap<FeatureName, MutableCategorical> = hashMapOf(),
+        private val gaussianFeatures: MutableMap<FeatureName, MutableGaussian> = hashMapOf()
+) {
+
+    fun toModel(): Model {
+        return Model(
+                priorCounts,
+                textFeatures.mapValues { it.value.toFeature() },
+                categoricalFeatures.mapValues { it.value.toFeature() },
+                gaussianFeatures.mapValues { it.value.toFeature() }
+        )
+    }
+
+    /**
+     * Creates a new model with the [Update]s added.
+     */
+    fun add(update: Update) {
+        batchAdd(listOf(update))
+    }
+
+    /**
+     * Creates a new model with the updates added.
+     *
+     * @param updates List of observed updates
+     * @return new updated Model
+     */
+    fun batchAdd(updates: List<Update>) {
+        updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts)
+
+        updateFeatures(categoricalFeatures, { MutableCategorical() }, updates, { it.categorical })
+        updateFeatures(textFeatures, { MutableText() }, updates, { it.text })
+        updateFeatures(gaussianFeatures, { MutableGaussian() }, updates, { it.gaussian })
+
+    }
+
+    private fun <V, F : MutableFeature<V>> updateFeatures(
+            features: MutableMap<FeatureName, F>,
             creator: () -> F,
             updates: List<Update>,
-            extractor: (Inputs) -> Map<FeatureName, V>): Map<FeatureName, F> {
+            extractor: (Inputs) -> Map<FeatureName, V>) {
 
         val outcomes = updates.map { it.outcome }
         val values = updates.map { extractor(it.inputs) }
 
         val data: Map<FeatureName, List<Pair<Outcome, V>>> = zipOutcomesAndValues(outcomes, values)
-        val features = old.toMutableMap()
         for ((name, pairs) in data) {
-            val f = features.getOrDefault(name, creator())
-            features[name] = f.batchUpdate(pairs)
+            features.getOrPut(name, creator).batchUpdate(pairs)
         }
-        return features
     }
 
     private fun <V> zipOutcomesAndValues(outcomes: List<Outcome>, values: List<Map<FeatureName, V>>): Map<FeatureName, List<Pair<Outcome, V>>> {
@@ -174,4 +196,6 @@ class Model(
         }
         return result
     }
+
+
 }

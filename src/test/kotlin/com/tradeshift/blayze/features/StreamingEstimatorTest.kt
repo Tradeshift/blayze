@@ -1,6 +1,5 @@
 package com.tradeshift.blayze.features
 
-import com.tradeshift.blayze.features.Gaussian.StreamingEstimator
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.sqrt

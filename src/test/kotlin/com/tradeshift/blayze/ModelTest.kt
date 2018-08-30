@@ -1,11 +1,10 @@
 import com.tradeshift.blayze.Model
+import com.tradeshift.blayze.MutableModel
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
-import com.tradeshift.blayze.features.Categorical
-import com.tradeshift.blayze.features.Multinomial
-import com.tradeshift.blayze.features.Text
+import com.tradeshift.blayze.features.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,7 +52,8 @@ class ModelTest {
 
     @Test
     fun gaussian_features_can_be_serialized_and_deserialized() {
-        val model = Model().batchAdd(
+        val model = MutableModel()
+        model.batchAdd(
                 listOf(
                         Update(Inputs(gaussian = mapOf(Pair("age", 20.0))), "eur"),
                         Update(Inputs(gaussian = mapOf(Pair("age", 30.0))), "eur"),
@@ -62,7 +62,7 @@ class ModelTest {
                         Update(Inputs(gaussian = mapOf(Pair("age", 40.0))), "eur")
                 ))
 
-        val bytes = model.toProto().toByteArray()
+        val bytes = model.toModel().toProto().toByteArray()
         val reconstructed = Model.fromProto(Protos.Model.parseFrom(bytes))
 
         val predictions = reconstructed.predict(Inputs(gaussian = mapOf(Pair("age", 23.0))))
@@ -85,17 +85,20 @@ class ModelTest {
     @Test
     fun adding_empty_batches_does_not_delete_features() {
         var model = Model(textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))))
-        model = model.batchAdd(listOf())
+        val mutable = model.toMutableModel()
+        mutable.batchAdd(listOf())
+        model = mutable.toModel()
 
         assertEquals(setOf("q"), model.toProto().textFeaturesMap.keys)
     }
 
     @Test
     fun adding_batches_without_a_feature_does_not_delete_that_feature() {
-        var model = Model()
-        model = model.add(Update(Inputs(text = mapOf("f1" to "foo bar baz")), "p"))
-        model = model.add(Update(Inputs(categorical = mapOf("f2" to "map")), "p"))
-        model = model.add(Update(Inputs(gaussian = mapOf("f3" to 23.3)), "p"))
+        var mutable = MutableModel()
+        mutable.add(Update(Inputs(text = mapOf("f1" to "foo bar baz")), "p"))
+        mutable.add(Update(Inputs(categorical = mapOf("f2" to "map")), "p"))
+        mutable.add(Update(Inputs(gaussian = mapOf("f3" to 23.3)), "p"))
+        val model = mutable.toModel()
 
         assertEquals(setOf("f1"), model.toProto().textFeaturesMap.keys)
         assertEquals(setOf("f2"), model.toProto().categoricalFeaturesMap.keys)
@@ -104,11 +107,13 @@ class ModelTest {
 
     @Test
     fun text_parameters_are_saved_when_serialized() {
-        var model = Model(textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))))
-        model = model.batchAdd(listOf(
+        var mutable = MutableModel(textFeatures = mutableMapOf("q" to MutableText(MutableMultinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))))
+        mutable.batchAdd(listOf(
                 Update(Inputs(text = mapOf("q" to "foo bar baz")), "p"),
                 Update(Inputs(text = mapOf("q" to "zap foo foo")), "p")
-        )).add(Update(Inputs(text = mapOf("q" to "map zap zee")), "n"))
+        ))
+        mutable.add(Update(Inputs(text = mapOf("q" to "map zap zee")), "n"))
+        val model = mutable.toModel()
 
         val bytes = model.toProto().toByteArray()
         val reconstructed = Model.fromProto(Protos.Model.parseFrom(bytes))
@@ -120,7 +125,9 @@ class ModelTest {
     @Test
     fun can_fit_20newsgroup() {
         val train = newsgroup("20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.01)))).batchAdd(train)
+        val mutable = MutableModel(textFeatures = mutableMapOf("q" to MutableText(MutableMultinomial(pseudoCount = 0.01))))
+        mutable.batchAdd(train)
+        val model = mutable.toModel()
 
         val test = newsgroup("20newsgroup_test.txt")
         val acc = test
@@ -141,17 +148,20 @@ class ModelTest {
 
     @Test
     fun can_batch_add_gaussian_features() {
-        val model = Model().batchAdd(
+        val mutable = MutableModel()
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(gaussian = mapOf(Pair("age", 20.0))), "eur"),
                         Update(Inputs(gaussian = mapOf(Pair("age", 30.0))), "eur"),
                         Update(Inputs(gaussian = mapOf(Pair("age", 40.0))), "usd")
-                )).batchAdd(
+                ))
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(gaussian = mapOf(Pair("age", 50.0))), "usd"),
                         Update(Inputs(gaussian = mapOf(Pair("age", 40.0))), "eur")
                 )
         )
+        val model = mutable.toModel()
         val predictions = model.predict(Inputs(gaussian = mapOf(Pair("age", 23.0))))
 
         assertEquals(predictions.keys, setOf("usd", "eur"))
@@ -171,16 +181,19 @@ class ModelTest {
 
     @Test
     fun can_batch_add_categorical_features() {
-        val model = Model().batchAdd(
+        val mutable = MutableModel()
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "usd"),
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "eur")
 
-                )).batchAdd(
+                ))
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(categorical = mapOf(Pair("user", "bob"))), "usd")
                 )
         )
+        val model = mutable.toModel()
         val predictions = model.predict(Inputs(categorical = mapOf(Pair("user", "alice"))))
 
         assertEquals(predictions.keys, setOf("usd", "eur"))
@@ -204,16 +217,19 @@ class ModelTest {
 
     @Test
     fun can_batch_add_text_features() {
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial()))).batchAdd(
+        val mutable = MutableModel(textFeatures = mutableMapOf("q" to MutableText(MutableMultinomial())))
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(text = mapOf(Pair("q", "foo bar baz"))), "positive"),
                         Update(Inputs(text = mapOf(Pair("q", "foo foo bar baz zap zoo"))), "negative")
 
-                )).batchAdd(
+                ))
+        mutable.batchAdd(
                 listOf(
                         Update(Inputs(text = mapOf(Pair("q", "map pap mee zap"))), "negative")
                 )
         )
+        val model = mutable.toModel()
         val predictions = model.predict(Inputs(text = mapOf(Pair("q", "foo"))))
 
         assertEquals(predictions.keys, setOf("positive", "negative"))
@@ -374,65 +390,43 @@ class ModelTest {
                     Pair("n", 3)
             )
 
-            val textFeatures = mapOf(
-                    Pair(
-                            "q",
-                            Text(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
-                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
-                                            )
-                                    )
-                            )
-
-                    ),
-                    Pair(
-                            "other_q",
-                            Text(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
-                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
-                                            )
-                                    )
-                            )
-                    ))
-
-            val categoricalFeatures = mapOf(Pair(
-                    "user",
-                    Categorical(
-                            Multinomial(
-                                    1.0,
-                                    1.0
-                            ).batchUpdate(
-                                    listOf(
-                                            "p" to Counter("ole"),
-                                            "n" to Counter("ole", "bob", "ada")
-                                    )
-                            )
+            val q = MutableMultinomial(1.0, 1.0)
+            q.batchUpdate(
+                    listOf(
+                            "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                            "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
                     )
-            ),
-                    Pair(
-                            "contry",
-                            Categorical(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter("utopia"),
-                                                    "n" to Counter("dystopia")
-                                            )
-                                    )
-                            )
-                    ))
+            )
+            val otherQ = MutableMultinomial(1.0, 1.0)
+            otherQ.batchUpdate(
+                    listOf(
+                            "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                            "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
+                    )
+            )
+            val textFeatures = mapOf(
+                    Pair("q", Text(q.toFeature())),
+                    Pair("other_q", Text(otherQ.toFeature()))
+            )
+
+            val user = MutableMultinomial(1.0, 1.0)
+            user.batchUpdate(
+                    listOf(
+                            "p" to Counter("ole"),
+                            "n" to Counter("ole", "bob", "ada")
+                    )
+            )
+            val country = MutableMultinomial(1.0, 1.0)
+            country.batchUpdate(
+                    listOf(
+                            "p" to Counter("utopia"),
+                            "n" to Counter("dystopia")
+                    )
+            )
+            val categoricalFeatures = mapOf(
+                    Pair("user", Categorical(user.toFeature())),
+                    Pair("contry", Categorical(country.toFeature()))
+            )
 
             return Model(priorCounts, textFeatures, categoricalFeatures)
         }

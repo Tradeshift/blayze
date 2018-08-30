@@ -7,23 +7,24 @@ import com.tradeshift.blayze.dto.Outcome
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.pow
-import kotlinx.collections.immutable.*
 
-class Multinomial private constructor(
+
+/**
+ * A feature for multinomial data.
+ *
+ * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
+ * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
+ */
+class Multinomial constructor(
         private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
-        private val outcomeIndices: Map<Outcome, Int>,
-        private val features: ImmutableMap<String, SparseIntVector>
-) : Feature<Multinomial, Counter<String>> {
+        private val outcomeIndices: Map<Outcome, Int> = mapOf(),
+        private val features: Map<String, SparseIntVector> = mapOf()
+) : Feature<Counter<String>> {
 
-    /**
-     * A feature for multinomial data.
-     *
-     * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
-     * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
-     */
-    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 1.0) :
-            this(includeFeatureProbability, pseudoCount, HashMap(), immutableHashMapOf())
+    override fun toMutableFeature(): MutableMultinomial {
+        return MutableMultinomial(includeFeatureProbability, pseudoCount, outcomeIndices.toMutableMap(), features.toMutableMap())
+    }
 
     /**
      * The number of features seen for each outcome
@@ -36,22 +37,6 @@ class Multinomial private constructor(
             }
         }
         res
-    }
-
-    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
-        val outcomesCopy = outcomeIndices.toMutableMap()
-        var featuresCopy = features
-
-        fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key, { outcomesCopy.size })
-
-        val formattedUpdates = invertUpdates(sampleUpdates(updates))
-        for ((feature, counter) in formattedUpdates) {
-            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
-            val vec = SparseIntVector.fromMap(indexToUpdate)
-            val newVec = featuresCopy[feature]?.add(vec) ?: vec
-            featuresCopy = featuresCopy.put(feature, newVec)
-        }
-        return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
     }
 
     /**
@@ -112,6 +97,45 @@ class Multinomial private constructor(
         return ln(numerator + pseudoCount) - ln(denominator + max(features.size, 1) * pseudoCount)
     }
 
+    fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
+            .setIncludeFeatureProbability(includeFeatureProbability)
+            .setPseudoCount(pseudoCount)
+            .putAllOutcomes(outcomeIndices)
+            .putAllFeatures(features.mapValues { it.value.toProto() })
+            .build()
+
+    companion object {
+        fun fromProto(proto: Protos.Multinomial) = Multinomial(
+                proto.includeFeatureProbability,
+                proto.pseudoCount,
+                proto.outcomesMap,
+                proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) })
+    }
+}
+
+class MutableMultinomial constructor(
+        private val includeFeatureProbability: Double = 1.0,
+        private val pseudoCount: Double = 1.0,
+        private val outcomeIndices: MutableMap<Outcome, Int> = mutableMapOf(),
+        private val features: MutableMap<String, SparseIntVector> = mutableMapOf()
+) : MutableFeature<Counter<String>> {
+
+    override fun toFeature(): Multinomial {
+        return Multinomial(includeFeatureProbability, pseudoCount, outcomeIndices, features)
+    }
+
+    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>) {
+        fun getOrCreateIndex(key: Outcome) = outcomeIndices.getOrPut(key, { outcomeIndices.size })
+
+        val formattedUpdates = invertUpdates(sampleUpdates(updates))
+        for ((feature, counter) in formattedUpdates) {
+            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
+            val vec = SparseIntVector.fromMap(indexToUpdate)
+            val newVec = features[feature]?.add(vec) ?: vec
+            features[feature] = newVec
+        }
+    }
+
     private fun sampleUpdates(updates: List<Pair<Outcome, Counter<String>>>): List<Pair<Outcome, Counter<String>>> {
         fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
         val knownFeatures = features.keys
@@ -134,18 +158,4 @@ class Multinomial private constructor(
         return flipped.mapValues { Counter(it.value) }
     }
 
-    fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
-            .setIncludeFeatureProbability(includeFeatureProbability)
-            .setPseudoCount(pseudoCount)
-            .putAllOutcomes(outcomeIndices)
-            .putAllFeatures(features.mapValues { it.value.toProto() })
-            .build()
-
-    companion object {
-        fun fromProto(proto: Protos.Multinomial) = Multinomial(
-                proto.includeFeatureProbability,
-                proto.pseudoCount,
-                proto.outcomesMap,
-                proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) }.toImmutableHashMap())
-    }
 }

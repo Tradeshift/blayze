@@ -11,7 +11,10 @@ import com.tradeshift.blayze.dto.Outcome
  *
  * The pre-processing replaces all non-letters and non-numbers with spaces, lowercases, splits on spaces and finally removes english stopwords.
  */
-class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue> {
+class Text(private val delegate: Multinomial = Multinomial()) : Feature<FeatureValue> {
+    override fun toMutableFeature(): MutableText {
+        return MutableText(delegate.toMutableFeature())
+    }
 
     fun toProto(): Protos.Text {
         return Protos.Text.newBuilder().setDelegate(delegate.toProto()).build()
@@ -21,11 +24,6 @@ class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, Fe
         fun fromProto(proto: Protos.Text): Text {
             return Text(Multinomial.fromProto(proto.delegate))
         }
-    }
-
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>): Text {
-        val words = updates.map { Pair(it.first, WordCounter.countWords(it.second)) }
-        return Text(delegate.batchUpdate(words))
     }
 
     override fun logProbability(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
@@ -50,4 +48,17 @@ class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, Fe
             return Counter(words)
         }
     }
+}
+
+
+class MutableText(private val delegate: MutableMultinomial = MutableMultinomial()) : MutableFeature<FeatureValue> {
+    override fun toFeature(): Text {
+        return Text(delegate.toFeature())
+    }
+
+    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>) {
+        val words = updates.map { Pair(it.first, Text.WordCounter.countWords(it.second)) }
+        return delegate.batchUpdate(words)
+    }
+
 }

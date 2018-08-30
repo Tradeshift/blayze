@@ -6,12 +6,16 @@ import org.junit.Test
 
 class CategoricalTest {
 
-    private val multinomial = Multinomial().batchUpdate(
-            listOf(
-                    "p" to Counter("ole"),
-                    "n" to Counter("ole", "bob", "ada")
-            )
-    )
+    private val multinomial: Multinomial
+        get() {
+            val mutable = MutableMultinomial()
+            mutable.batchUpdate(
+                    listOf(
+                            "p" to Counter("ole"),
+                            "n" to Counter("ole", "bob", "ada")
+                    ))
+            return mutable.toFeature()
+        }
 
     @Test
     fun return_right_log_probability() {
@@ -30,9 +34,10 @@ class CategoricalTest {
 
     @Test
     fun test_batch_update() {
-        val categorical = Categorical()
-                .batchUpdate(listOf("p" to "ole", "n" to "ole"))
-                .batchUpdate(listOf("n" to "bob", "n" to "ada"))
+        val mutable = MutableCategorical()
+        mutable.batchUpdate(listOf("p" to "ole", "n" to "ole"))
+        mutable.batchUpdate(listOf("n" to "bob", "n" to "ada"))
+        val categorical = mutable.toFeature()
 
         val pP = categorical.logProbability(setOf("p"), "ole")["p"]!!
         val pN = categorical.logProbability(setOf("n"), "ole")["n"]!!

@@ -2,6 +2,7 @@ package com.tradeshift.blayze
 
 import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.features.Multinomial
+import com.tradeshift.blayze.features.MutableMultinomial
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -46,10 +47,15 @@ class MultinomialTest {
         assertEquals(-2.197, logProb["x"]!!, 0.001)
     }
 
-    private val multinomial = Multinomial(1.0, 1.0).batchUpdate(
-            listOf(
-                    "p" to Counter("a", "b"),
-                    "n" to Counter("b", "c")
-            )
-    )
+    private val multinomial: Multinomial
+        get() {
+            val mutable = MutableMultinomial(1.0, 1.0)
+            mutable.batchUpdate(
+                    listOf(
+                            "p" to Counter("a", "b"),
+                            "n" to Counter("b", "c")
+                    ))
+            return mutable.toFeature()
+        }
+
 }

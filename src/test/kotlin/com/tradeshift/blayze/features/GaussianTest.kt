@@ -1,6 +1,5 @@
 package com.tradeshift.blayze.features
 
-import com.tradeshift.blayze.features.Gaussian.StreamingEstimator
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.math.*
@@ -40,15 +39,18 @@ class GaussianTest {
 
     @Test
     fun given_batches_updates_correctly() {
-        val actual = Gaussian()
+        val mutable = MutableGaussian()
+        mutable
                 .batchUpdate(listOf(
                         "p" to 1.0,
                         "p" to 2.0,
                         "n" to 3.0
-                )).batchUpdate(listOf(
-                        "p" to 3.0,
-                        "n" to 2.0
                 ))
+        mutable.batchUpdate(listOf(
+                "p" to 3.0,
+                "n" to 2.0
+        ))
+        val actual = mutable.toFeature()
 
         val expected = Gaussian(mapOf(
                 "p" to StreamingEstimator(1.0).add(2.0).add(3.0),
