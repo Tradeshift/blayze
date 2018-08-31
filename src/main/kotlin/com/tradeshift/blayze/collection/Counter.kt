@@ -7,6 +7,7 @@ class Counter<T>(private val counts: Map<T, Int> = mapOf()) : Map<T, Int> by cou
 
     constructor(entries: Iterable<T>) : this(entries.groupingBy { it }.eachCount())
     constructor(vararg entries: T) : this(entries.asIterable())
+    constructor(entry: T) : this(mapOf(entry to 1))
 
     override operator fun get(key: T): Int {
         return counts[key] ?: 0
