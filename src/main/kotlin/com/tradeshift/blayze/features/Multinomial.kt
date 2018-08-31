@@ -16,7 +16,7 @@ import kotlin.math.pow
  * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
  */
 class Multinomial constructor(
-        private val includeFeatureProbability: Double = 0.1,
+        private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
         private val outcomeIndices: Map<Outcome, Int> = mapOf(),
         private val features: Map<String, SparseIntVector> = mapOf()
@@ -114,7 +114,7 @@ class Multinomial constructor(
 }
 
 class MutableMultinomial constructor(
-        private val includeFeatureProbability: Double = 0.1,
+        private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 1.0,
         private val outcomeIndices: MutableMap<Outcome, Int> = mutableMapOf(),
         private val features: MutableMap<String, SparseIntVector> = mutableMapOf()
