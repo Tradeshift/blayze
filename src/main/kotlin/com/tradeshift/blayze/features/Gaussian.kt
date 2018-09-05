@@ -76,6 +76,7 @@ class StreamingEstimator private constructor(
      * B. P. Welford (1962). "Note on a method for calculating corrected sums of squares and products".
      */
     fun add(x: Double): StreamingEstimator {
+        require(x.isFinite(), { "x must be finite. It was $x" })
         var (count, mean, m2) = Triple(count, mean, m2)
         count += 1
         val delta = x - mean
