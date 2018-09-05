@@ -16,6 +16,7 @@ class Gaussian(
     }
 
     override fun logProbability(outcomes: Set<Outcome>, value: Double): Map<Outcome, Double> {
+        require(value.isFinite(), { "Value must be finite. It was $value" })
         val results = mutableMapOf<Outcome, Double>()
         for (outcome in outcomes) {
             results[outcome] = logPropabilityOutcome(outcome, value)
