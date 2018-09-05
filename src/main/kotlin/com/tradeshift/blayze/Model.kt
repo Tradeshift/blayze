@@ -5,6 +5,7 @@ import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.*
+import kotlin.streams.toList
 
 /**
  * A flexible and robust naive bayes classifier that supports multiple features of multiple types, and iterative updating.
@@ -109,7 +110,7 @@ class Model(
     }
 
     private fun <V> logProbabilities(features: Map<FeatureName, Feature<V>>, values: Map<FeatureName, V>): List<Map<Outcome, Double>> {
-        return values.map { (key, value) -> features[key]?.logProbability(logPrior.keys, value) }.filterNotNull()
+        return values.toList().parallelStream().map { (key, value) -> features[key]?.logProbability(logPrior.keys, value) }.toList().filterNotNull()
     }
 
     private fun sumMaps(maps: List<Map<Outcome, Double>>): Map<Outcome, Double> {
