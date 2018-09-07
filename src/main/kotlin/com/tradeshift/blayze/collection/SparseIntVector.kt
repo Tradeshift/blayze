@@ -49,6 +49,7 @@ class SparseIntVector private constructor(private val indices: IntArray, private
             val values = IntArray(nInts)
             ByteBuffer.wrap(proto.values.toByteArray()).asIntBuffer().get(values, 0, nInts)
             return SparseIntVector(indices, values)
+
         }
 
     }
