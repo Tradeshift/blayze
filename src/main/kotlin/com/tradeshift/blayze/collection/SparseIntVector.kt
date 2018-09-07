@@ -1,13 +1,15 @@
 package com.tradeshift.blayze.collection
 
+import com.google.protobuf.ByteString
 import com.tradeshift.blayze.Protos
-import java.util.TreeMap
+import java.nio.ByteBuffer
+import java.util.*
 
 
 /**
  * A sparse vector that stores non-zero indices and values in primitive arrays.
  */
-class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray): Iterable<Pair<Int, Int>> {
+class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray) : Iterable<Pair<Int, Int>> {
 
     fun add(other: SparseIntVector): SparseIntVector {
         val m = TreeMap<Int, Int>()
@@ -22,8 +24,17 @@ class SparseIntVector private constructor(private val indices: IntArray, private
      */
     override fun iterator(): Iterator<Pair<Int, Int>> = indices.zip(values).iterator()
 
-    fun toProto(): Protos.SparseIntVector = Protos.SparseIntVector.newBuilder()
-            .addAllIndices(indices.asIterable()).addAllValues(values.asIterable()).build()
+    fun toProto(): Protos.SparseIntVector {
+        val iBuffer = ByteBuffer.allocate(Integer.BYTES * indices.size)
+        iBuffer.asIntBuffer().put(indices)
+        val vBuffer = ByteBuffer.allocate(Integer.BYTES * values.size)
+        vBuffer.asIntBuffer().put(values)
+
+        return Protos.SparseIntVector.newBuilder()
+                .setIndices(ByteString.copyFrom(iBuffer))
+                .setValues(ByteString.copyFrom(vBuffer))
+                .build()
+    }
 
     companion object {
         fun fromMap(map: Map<Int, Int>): SparseIntVector {
@@ -31,7 +42,11 @@ class SparseIntVector private constructor(private val indices: IntArray, private
             return SparseIntVector(sortedNonZeros.keys.toIntArray(), sortedNonZeros.values.toIntArray())
         }
 
-        fun fromProto(proto: Protos.SparseIntVector): SparseIntVector =
-                SparseIntVector(proto.indicesList.toIntArray(), proto.valuesList.toIntArray())
+        fun fromProto(proto: Protos.SparseIntVector): SparseIntVector {
+            val indices = ByteBuffer.wrap(proto.indices.toByteArray()).asIntBuffer().array()
+            val values = ByteBuffer.wrap(proto.values.toByteArray()).asIntBuffer().array()
+            return SparseIntVector(indices, values)
+        }
+
     }
 }
