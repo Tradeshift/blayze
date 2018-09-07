@@ -43,8 +43,11 @@ class SparseIntVector private constructor(private val indices: IntArray, private
         }
 
         fun fromProto(proto: Protos.SparseIntVector): SparseIntVector {
-            val indices = ByteBuffer.wrap(proto.indices.toByteArray()).asIntBuffer().array()
-            val values = ByteBuffer.wrap(proto.values.toByteArray()).asIntBuffer().array()
+            val nInts = proto.indices.size().div(Integer.BYTES)
+            val indices = IntArray(nInts)
+            ByteBuffer.wrap(proto.indices.toByteArray()).asIntBuffer().get(indices, 0, nInts)
+            val values = IntArray(nInts)
+            ByteBuffer.wrap(proto.values.toByteArray()).asIntBuffer().get(values, 0, nInts)
             return SparseIntVector(indices, values)
         }
 
