@@ -37,8 +37,8 @@ message Multinomial {
 }
 
 message SparseIntVector {
-    repeated uint32 indices = 1;
-    repeated uint32 values = 2;
+    bytes indices = 3;
+    bytes values = 4;
 }
 
 message Inputs {
