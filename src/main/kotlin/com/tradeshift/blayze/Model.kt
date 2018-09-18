@@ -65,7 +65,7 @@ class Model(
     }
     companion object {
 
-        private val version = 2
+        private const val version = 3
 
         fun fromProto(proto: Protos.Model): Model {
             if (proto.modelVersion != version) {
