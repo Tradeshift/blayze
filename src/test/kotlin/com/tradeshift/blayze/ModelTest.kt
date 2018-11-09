@@ -138,6 +138,152 @@ class ModelTest {
         assertTrue(acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
     }
 
+    @Test
+    fun test_gaussian_by_comparing_scikit_learn_output() {
+        var model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 99.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 101.0))),
+                                "t-shirt")
+
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", -99.0))),
+                                "sweater"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", -101.0))),
+                                "sweater")
+                )
+        )
+
+        var predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("weather.degree", 0.0))
+        ))
+
+        assertEquals(0.5, predictions["t-shirt"]!!, 1e-6)
+        assertEquals(0.5, predictions["sweater"]!!, 1e-6)
+
+        model = model.batchAdd(
+                listOf(
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 98.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 102.0))),
+                                "t-shirt")
+
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", -98.2))),
+                                "sweater"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", -102.2))),
+                                "sweater")
+                )
+        )
+
+        predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("weather.degree", 0.0))
+        ))
+
+        println(predictions)
+        assertEquals(0.01834153, predictions["t-shirt"]!!, 1e-3)
+        assertEquals(0.98165847, predictions["sweater"]!!, 1e-3)
+
+//        # comparing output with scikit-learn 0.20
+//        import numpy as np
+//                X = np.array([[-99], [-101], [99], [101]])
+//        Y = np.array([1, 1, 2, 2])
+//        from sklearn.naive_bayes import GaussianNB
+//                clf = GaussianNB(var_smoothing=0.0)
+//        clf.fit(X, Y)
+//
+//        print(clf.predict_proba([[0]]))
+//
+//
+//        clf.partial_fit(np.array([[-98.2], [-102.2], [98], [102]]),
+//                np.array([1, 1, 2, 2]))
+//
+//        print(clf.predict_proba([[0]]))
+//        # gives output:
+//        # [[0.5 0.5]]
+//        # [[0.98165847 0.01834153]]
+    }
+
+    @Test
+    fun different_features_should_be_weighted_equally_by_default() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                text = mapOf(Pair("weather.words", "very warm")),
+                                categorical = mapOf(Pair("weather.label", "warm"))),
+                                "t-shirt")
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                text = mapOf(Pair("weather.words", "very cold")),
+                                categorical = mapOf(Pair("weather.label", "cold"))), "sweater"))
+        )
+
+        val predictions = model.predict(Inputs(
+                text = mapOf(Pair("weather.words", "very warm")),
+                categorical = mapOf(Pair("weather.label", "cold"))
+        ))
+
+        assertEquals(predictions["t-shirt"]!!, 0.5, 1e-6)
+        assertEquals(predictions["sweater"]!!, 0.5, 1e-6)
+
+        val predictions2 = model.predict(Inputs(
+                text = mapOf(Pair("weather.words", "very warm warm warm warm warm warm")),
+                categorical = mapOf(Pair("weather.label", "cold"))
+        ))
+
+        assertEquals(0.5, predictions2["t-shirt"]!!, 1e-6) // text feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
+        assertEquals(0.5, predictions2["sweater"]!!, 1e-6)
+
+    }
+
+    @Test
+    fun different_features_should_be_weighted_equally_by_default_test_gaussian() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("weather.label", "warm")),
+                                gaussian = mapOf(Pair("weather.degree", 19.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("weather.label", "warm")),
+                                gaussian = mapOf(Pair("weather.degree", 21.0))),
+                                "t-shirt")
+
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("weather.label", "cold")),
+                                gaussian = mapOf(Pair("weather.degree", -19.0))),
+                                "sweater"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("weather.label", "cold")),
+                                gaussian = mapOf(Pair("weather.degree", -21.0))),
+                                "sweater")
+                )
+        )
+
+        val predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("weather.label", "cold")),
+                gaussian = mapOf(Pair("weather.degree", 20.0))
+        ))
+
+        assertEquals(0.5, predictions["t-shirt"]!!, 1e-6) // gaussian feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
+        assertEquals(0.5, predictions["sweater"]!!, 1e-6)
+
+    }
+
 
     @Test
     fun can_batch_add_gaussian_features() {
