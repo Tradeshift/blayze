@@ -239,12 +239,12 @@ class ModelTest {
         assertEquals(predictions["sweater"]!!, 0.5, 1e-6)
 
         val predictions2 = model.predict(Inputs(
-                text = mapOf(Pair("weather.words", "very warm warm warm warm warm warm")),
+                text = mapOf(Pair("weather.words", "warm warm warm warm")),
                 categorical = mapOf(Pair("weather.label", "cold"))
         ))
 
-        assertEquals(0.5, predictions2["t-shirt"]!!, 1e-6) // text feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
-        assertEquals(0.5, predictions2["sweater"]!!, 1e-6)
+        assertEquals(0.5, predictions2["t-shirt"]!!, 2e-1) // text feature says "warm", categorical says "cold", with equal weight, they should predict with prob close to 0.5 for each
+        assertEquals(0.5, predictions2["sweater"]!!, 2e-1)
 
     }
 
@@ -281,6 +281,50 @@ class ModelTest {
 
         assertEquals(0.5, predictions["t-shirt"]!!, 1e-6) // gaussian feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
         assertEquals(0.5, predictions["sweater"]!!, 1e-6)
+
+    }
+
+    @Test
+    fun different_features_should_be_weighted_equally_by_default_test_gaussian2() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "no")),
+                                gaussian = mapOf(Pair("height", 95.0))),
+                                "child"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "no")),
+                                gaussian = mapOf(Pair("height", 105.0))),
+                                "child")
+
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "yes")),
+                                gaussian = mapOf(Pair("height", 179.0))),
+                                "adult"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "yes")),
+                                gaussian = mapOf(Pair("height", 181.0))),
+                                "adult")
+                )
+        )
+
+        var predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("have driverlicense", "yes"))
+        ))
+        println(predictions)
+        // {child=0.25, adult=0.7499999999999999}
+
+        predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("have driverlicense", "yes")),
+                gaussian = mapOf(Pair("height", 140.0))
+        ))
+        println(predictions)
+        // {child=1.0, adult=2.552761305287827E-166}
+
+        assertEquals(0.5, predictions["child"]!!, 2e-1)
+        assertEquals(0.5, predictions["adult"]!!, 2e-1)
 
     }
 
