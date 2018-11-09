@@ -33,9 +33,9 @@ class Gaussian(
         //                      = -log(sqrt(2*pi*sigma^2))          - (x-mu)^2/(2*sigma^2)
         //                      = -log(sigma*sqrt(2*pi))            - (x-mu)^2/(2*sigma^2)
         //                      = -log(sigma) - log(sqrt(2*pi))     - (x-mu)^2/(2*sigma^2)
-        val (mu, sigma) = estimators[outcome] ?: return 0.0
-        if (sigma == 0.0) {
-            return 0.0
+        var (mu, sigma) = estimators[outcome] ?: return 0.0
+        if (sigma < 1.0) {
+            sigma = 1.0  // prevent overflow
         }
         return -ln(sigma) - ln(sqrt(2 * PI)) - (value - mu).pow(2).div(2 * sigma.pow(2))
     }
@@ -48,7 +48,7 @@ class Gaussian(
             val mean: Double,
             private val m2: Double
     ) {
-        constructor(x: Double) : this(1, x, 0.0)
+        constructor(x: Double) : this(1, x, 1800.0)  // suggested solution: maybe allowing the model to be iniciated with
 
         fun add(x: Double): StreamingEstimator {
             var (count, mean, m2) = Triple(count, mean, m2)
@@ -63,9 +63,9 @@ class Gaussian(
 
         val stdev: Double by lazy {
             if (count < 2) {
-                0.0
+                sqrt(m2)  // this will stop the one case domination problem when the sigma is small
             } else {
-                sqrt(m2 / (count - 1))
+                max(sqrt(m2 / (count - 1)), 1.0)  // stop creating singularity with very small sigma that dominate log prpb
             }
         }
 

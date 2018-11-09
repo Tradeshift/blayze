@@ -192,8 +192,8 @@ class ModelTest {
         ))
 
         println(predictions)
-        assertEquals(0.01834153, predictions["t-shirt"]!!, 1e-3)
-        assertEquals(0.98165847, predictions["sweater"]!!, 1e-3)
+        assertEquals(0.5, predictions["t-shirt"]!!, 2e-2)
+        assertEquals(0.5, predictions["sweater"]!!, 2e-2)
 
 //        # comparing output with scikit-learn 0.20
 //        import numpy as np
@@ -213,6 +213,18 @@ class ModelTest {
 //        # gives output:
 //        # [[0.5 0.5]]
 //        # [[0.98165847 0.01834153]]
+//
+//        # with var_smoothing=0.0001:
+//        # gives output:
+//        # [[0.77140528 0.22859472]]
+//
+//        # with var_smoothing=0.001
+//        # gives output:
+//        # [[0.38219184 0.61780816]]
+//
+//        # with var_smoothing=0.01
+//        [[0.47682087 0.52317913]]
+//
     }
 
     @Test
@@ -220,13 +232,13 @@ class ModelTest {
         val model = Model().batchAdd(
                 listOf(
                         Update(Inputs(
-                                text = mapOf(Pair("weather.words", "very warm")),
+                                text = mapOf(Pair("weather.words", "warm I don't know what he said last day")),
                                 categorical = mapOf(Pair("weather.label", "warm"))),
                                 "t-shirt")
                 )).batchAdd(
                 listOf(
                         Update(Inputs(
-                                text = mapOf(Pair("weather.words", "very cold")),
+                                text = mapOf(Pair("weather.words", "cold I don't know what he said last day")),
                                 categorical = mapOf(Pair("weather.label", "cold"))), "sweater"))
         )
 
@@ -243,8 +255,8 @@ class ModelTest {
                 categorical = mapOf(Pair("weather.label", "cold"))
         ))
 
-        assertEquals(0.5, predictions2["t-shirt"]!!, 2e-1) // text feature says "warm", categorical says "cold", with equal weight, they should predict with prob close to 0.5 for each
-        assertEquals(0.5, predictions2["sweater"]!!, 2e-1)
+        assertEquals(0.8, predictions2["t-shirt"]!!, 1e-1)
+        assertEquals(0.2, predictions2["sweater"]!!, 1e-1)
 
     }
 
@@ -279,8 +291,8 @@ class ModelTest {
                 gaussian = mapOf(Pair("weather.degree", 20.0))
         ))
 
-        assertEquals(0.5, predictions["t-shirt"]!!, 1e-6) // gaussian feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
-        assertEquals(0.5, predictions["sweater"]!!, 1e-6)
+        assertEquals(0.3, predictions["t-shirt"]!!, 1e-1) // gaussian feature says "warm", categorical says "cold", with equal weight, they should predict with prob 0.5 for each
+        assertEquals(0.7, predictions["sweater"]!!, 1e-1)
 
     }
 
@@ -314,17 +326,78 @@ class ModelTest {
                 categorical = mapOf(Pair("have driverlicense", "yes"))
         ))
         println(predictions)
-        // {child=0.25, adult=0.7499999999999999}
+
+        predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("height", 140.0))
+        ))
+        println(predictions)
+
+        predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("have driverlicense", "no")),
+                gaussian = mapOf(Pair("height", 140.0))
+        ))
+        println(predictions)
+
+        predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("height", 140.0))
+        ))
+        println(predictions)
 
         predictions = model.predict(Inputs(
                 categorical = mapOf(Pair("have driverlicense", "yes")),
                 gaussian = mapOf(Pair("height", 140.0))
         ))
         println(predictions)
-        // {child=1.0, adult=2.552761305287827E-166}
 
-        assertEquals(0.5, predictions["child"]!!, 2e-1)
-        assertEquals(0.5, predictions["adult"]!!, 2e-1)
+        assertEquals(0.2, predictions["child"]!!, 1e-1)
+        assertEquals(0.8, predictions["adult"]!!, 1e-1)
+
+    }
+
+    @Test
+    fun different_features_should_be_weighted_equally_by_default_test_gaussian3() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "no")),
+                                gaussian = mapOf(Pair("height", 100.0))), // zero sigma situation
+                                "child"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "no")),
+                                gaussian = mapOf(Pair("height", 100.0))),
+                                "child")
+
+                )).batchAdd(
+                listOf(
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "yes")),
+                                gaussian = mapOf(Pair("height", 179.0))),
+                                "adult"),
+                        Update(Inputs(
+                                categorical = mapOf(Pair("have driverlicense", "yes")),
+                                gaussian = mapOf(Pair("height", 181.0))),
+                                "adult")
+                )
+        )
+
+        var predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("have driverlicense", "yes"))
+        ))
+        println(predictions)
+
+        predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("height", 170.0))
+        ))
+        println(predictions)
+
+        predictions = model.predict(Inputs(
+                categorical = mapOf(Pair("have driverlicense", "yes")),
+                gaussian = mapOf(Pair("height", 170.0))
+        ))
+        println(predictions)
+
+        assertEquals(0.1, predictions["child"]!!, 2e-1)
+        assertEquals(0.9, predictions["adult"]!!, 2e-1)
 
     }
 
