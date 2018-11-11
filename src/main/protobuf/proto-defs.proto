@@ -8,6 +8,7 @@ message Model {
     map<string, Categorical> categoricalFeatures = 2;
     map<string, Text> textFeatures = 3;
     map<string, Gaussian> gaussianFeatures = 4;
+    int32 pseudoCount = 6;
     uint32 modelVersion = 5;
 }
 

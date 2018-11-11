@@ -4,13 +4,13 @@ import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.collection.SparseIntVector
 import com.tradeshift.blayze.dto.Outcome
-import kotlin.math.ln
-import kotlin.math.max
+import com.tradeshift.blayze.logBeta
+import java.lang.Math.log
 import kotlin.math.pow
 
 class Multinomial private constructor(
         private val includeFeatureProbability: Double = 1.0,
-        private val pseudoCount: Double = 1.0,
+        private val pseudoCount: Double = 0.1,
         private val outcomeIndices: Map<Outcome, Int>,
         private val features: Map<String, SparseIntVector>
 ) : Feature<Multinomial, Counter<String>> {
@@ -19,9 +19,9 @@ class Multinomial private constructor(
      * A feature for multinomial data.
      *
      * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
-     * @property pseudoCount Add this number to all counts, even zero counts. Prevents 0 probability. See http://en.wikipedia.org/wiki/Naive_Bayes_classifier#Multinomial_naive_Bayes
+     * @property pseudoCount Effectively adds this number to all counts, even zero counts.
      */
-    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 1.0) :
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
             this(includeFeatureProbability, pseudoCount, HashMap(), HashMap())
 
     /**
@@ -41,73 +41,41 @@ class Multinomial private constructor(
         val featuresCopy = features.toMutableMap()
         val outcomesCopy = outcomeIndices.toMutableMap()
 
-        fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key, { outcomesCopy.size })
+        fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key) { outcomesCopy.size }
 
         val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence()))
         for ((feature, counter) in formattedUpdates) {
-            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key)  }
+            val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
             val vec = SparseIntVector.fromMap(indexToUpdate)
             featuresCopy[feature] = featuresCopy[feature]?.add(vec) ?: vec
         }
         return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
     }
 
-    /**
-     * The unnormalized log probability for each outcome, which is defined as:
-     *
-     *      logProb_o = sum_f(log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
-     *
-     * where sum_f is a sum over all input features, S_of is the number of times feature f has been seen with outcome o,
-     * and sum_i is a sum over all seen features.
-     *
-     * In the case where the count matrix S_cf is sparse this computation will be dominated by zero values. To retain
-     * performance in this case this implementation reduces the number of computations required by separating
-     * the calculation of zero-valued entries of S and non-zero entries:
-     *
-     *      logProb_o = sum_fnonzero((log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
-     *                  + sum_fzero((log(0 + pseudoCount) - log(sum_i(S_oi + pseudoCount))
-     *
-     *                = sum_fnonzero((log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
-     *                  + sum_fzero(1) * (log(S_of + pseudoCount) - log(sum_i(S_oi + pseudoCount))
-     *
-     * The second term only needs to be computed once instead of summing over all input features.
-     */
-    override fun logProbability(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
-        // sum all log probabilities for non-zero feature-outcome combinations
-        val nonZeroLogProbs = DoubleArray(outcomeIndices.size)
-        val nonZeroCounts = IntArray(outcomeIndices.size)
-        var nFeatures = 0
-        for ((feature, count) in value) {
-            val vector = features[feature]
-            if (vector != null) {
-                nFeatures += count
-                for ((idx, v) in vector) {
-                    nonZeroLogProbs[idx] += count * logProbability(v, nFeaturesPerOutcome[idx])
-                    nonZeroCounts[idx] += count
-                }
-            }
+
+    // See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution#Dirichlet-multinomial_as_a_compound_distribution
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
+        val n = value.values.sum()
+        if (n == 0 || features.isEmpty()) { // empty input or empty model
+            return outcomes.map { it to 0.0 }.toMap()
         }
 
-        // then compute log probabilities for zero valued feature-outcome combinations
-        val zeroLogProbs = nonZeroCounts.mapIndexed { idx, nonZeroCount ->
-            val zeroCount = nFeatures - nonZeroCount
-            zeroCount * logProbability(0, nFeaturesPerOutcome[idx])
+        val alpha_kc = value.mapValues { features[it.key]?.asMap() ?: mapOf() }
+
+        val result = mutableMapOf<String, Double>()
+        for (outcome in outcomes) {
+            val outcomeIdx = outcomeIndices[outcome]
+            val alpha_0 = if (outcomeIdx != null) {
+                nFeaturesPerOutcome[outcomeIdx]
+            } else {
+                0
+            }
+            val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * pseudoCount, n.toDouble())
+            val denominator = value.map { (word, count) -> log(count.toDouble()) + logBeta((alpha_kc[word]!![outcomeIdx] ?: 0) + pseudoCount, count.toDouble()) }.sum()
+            result[outcome] = numerator - denominator
         }
 
-        return outcomes.map { outcome ->
-            val idx = outcomeIndices[outcome]
-            val logProb = if (idx != null)
-                nonZeroLogProbs[idx] + zeroLogProbs[idx]
-            else {
-                // unseen outcomeIndices have zero counts
-                nFeatures * logProbability(0, 0)
-            }
-            outcome to logProb
-        }.toMap()
-    }
-
-    private fun logProbability(numerator: Int, denominator: Int): Double {
-        return ln(numerator + pseudoCount) - ln(denominator + max(features.size, 1) * pseudoCount)
+        return result
     }
 
     private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {

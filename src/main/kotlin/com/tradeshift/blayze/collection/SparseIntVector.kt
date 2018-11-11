@@ -8,7 +8,7 @@ import java.util.TreeMap
 /**
  * A sparse vector that stores non-zero indices and values in primitive arrays.
  */
-class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray): Iterable<Pair<Int, Int>> {
+class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray) : Iterable<Pair<Int, Int>> {
 
     fun add(other: SparseIntVector): SparseIntVector {
         val m = TreeMap<Int, Int>()
@@ -23,12 +23,15 @@ class SparseIntVector private constructor(private val indices: IntArray, private
      */
     override fun iterator(): Iterator<Pair<Int, Int>> = indices.zip(values).iterator()
 
+    fun asMap(): Map<Int, Int> {
+        return indices.zip(values).toMap()
+    }
+
     fun toProto(): Protos.SparseIntVector = Protos.SparseIntVector.newBuilder()
             .setIndices(toByteString(indices)).setValues(toByteString(values)).build()
 
 
     companion object {
-
         private fun toIntArray(bytes: ByteString): IntArray {
             val buffer = bytes.asReadOnlyByteBuffer().asIntBuffer()
             val arr = IntArray(buffer.remaining())
@@ -40,6 +43,10 @@ class SparseIntVector private constructor(private val indices: IntArray, private
             val bb = ByteBuffer.allocate(ints.size * Integer.BYTES)
             bb.asIntBuffer().put(ints)
             return ByteString.copyFrom(bb)
+        }
+
+        fun empty(): SparseIntVector {
+            return fromMap(mapOf())
         }
 
         fun fromMap(map: Map<Int, Int>): SparseIntVector {
