@@ -73,7 +73,7 @@
             <!-- Kotlin standard library -->
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
-            <version>1.3.10</version>
+            <version>${kotlin.version}</version>
         </dependency>
         <dependency>
             <!-- Kotlin standard library -->
@@ -111,7 +111,7 @@
             <!-- For testing -->
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-test</artifactId>
-            <version>1.3.10</version>
+            <version>${kotlin.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

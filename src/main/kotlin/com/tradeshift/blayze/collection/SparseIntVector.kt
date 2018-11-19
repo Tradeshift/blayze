@@ -23,10 +23,6 @@ class SparseIntVector private constructor(private val indices: IntArray, private
      */
     override fun iterator(): Iterator<Pair<Int, Int>> = indices.zip(values).iterator()
 
-    fun asMap(): Map<Int, Int> {
-        return indices.zip(values).toMap()
-    }
-
     fun toProto(): Protos.SparseIntVector = Protos.SparseIntVector.newBuilder()
             .setIndices(toByteString(indices)).setValues(toByteString(values)).build()
 
@@ -43,10 +39,6 @@ class SparseIntVector private constructor(private val indices: IntArray, private
             val bb = ByteBuffer.allocate(ints.size * Integer.BYTES)
             bb.asIntBuffer().put(ints)
             return ByteString.copyFrom(bb)
-        }
-
-        fun empty(): SparseIntVector {
-            return fromMap(mapOf())
         }
 
         fun fromMap(map: Map<Int, Int>): SparseIntVector {
