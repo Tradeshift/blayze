@@ -11,7 +11,7 @@ import kotlin.math.pow
 class Multinomial private constructor(
         private val includeFeatureProbability: Double = 1.0,
         private val pseudoCount: Double = 0.1,
-        private val outcomeIndices: Map<Outcome, Int>,
+        private val outcomeToIdx: Map<Outcome, Int>,
         private val features: Map<String, SparseIntVector>
 ) : Feature<Multinomial, Counter<String>> {
 
@@ -28,7 +28,7 @@ class Multinomial private constructor(
      * The number of features seen for each outcome
      */
     private val nFeaturesPerOutcome: IntArray by lazy {
-        val res = IntArray(outcomeIndices.size)
+        val res = IntArray(outcomeToIdx.size)
         for (vec in features.values) {
             for ((idx, count) in vec) {
                 res[idx] += count
@@ -37,9 +37,13 @@ class Multinomial private constructor(
         res
     }
 
+    private val idxToOutcome: Map<Int, Outcome> by lazy {
+        outcomeToIdx.map { it.value to it.key }.toMap()
+    }
+
     override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
         val featuresCopy = features.toMutableMap()
-        val outcomesCopy = outcomeIndices.toMutableMap()
+        val outcomesCopy = outcomeToIdx.toMutableMap()
 
         fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key) { outcomesCopy.size }
 
@@ -60,19 +64,33 @@ class Multinomial private constructor(
             return outcomes.map { it to 0.0 }.toMap()
         }
 
-        val alpha_kc = value.mapValues { features[it.key]?.asMap() ?: mapOf() }
-
         val result = mutableMapOf<String, Double>()
+        val logBetaZeroCounts = value.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) }
+        val logBetaZeroCountsSum = logBetaZeroCounts.map { it.value }.sum()
         for (outcome in outcomes) {
-            val outcomeIdx = outcomeIndices[outcome]
+            val outcomeIdx = outcomeToIdx[outcome]
             val alpha_0 = if (outcomeIdx != null) {
                 nFeaturesPerOutcome[outcomeIdx]
             } else {
                 0
             }
             val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * pseudoCount, n.toDouble())
-            val denominator = value.map { (word, count) -> log(count.toDouble()) + logBeta((alpha_kc[word]!![outcomeIdx] ?: 0) + pseudoCount, count.toDouble()) }.sum()
-            result[outcome] = numerator - denominator
+            result[outcome] = numerator - logBetaZeroCountsSum //assuming every class has seen every word 0 times
+        }
+
+        for ((word, count) in value) {
+            val alpha_kc = features[word]
+            if (alpha_kc != null) {
+                val wrong = logBetaZeroCounts[word]!!
+                for ((outcomeIdx, i) in alpha_kc) {
+                    val outcome = idxToOutcome[outcomeIdx]!!
+                    val prev = result[outcome]
+                    if (prev != null) { //outcomes may be a subset of all the outcomes we've observed
+                        val correct = log(count.toDouble()) + logBeta(i + pseudoCount, count.toDouble())
+                        result[outcome] = prev - (-wrong + correct) //subtract error, add correct value
+                    }
+                }
+            }
         }
 
         return result
@@ -102,7 +120,7 @@ class Multinomial private constructor(
     fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
             .setIncludeFeatureProbability(includeFeatureProbability)
             .setPseudoCount(pseudoCount)
-            .putAllOutcomes(outcomeIndices)
+            .putAllOutcomes(outcomeToIdx)
             .putAllFeatures(features.mapValues { it.value.toProto() })
             .build()
 
