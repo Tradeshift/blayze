@@ -13,6 +13,10 @@ import com.tradeshift.blayze.dto.Outcome
  */
 class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue> {
 
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
+            this(Multinomial(includeFeatureProbability, pseudoCount))
+
+
     fun toProto(): Protos.Text {
         return Protos.Text.newBuilder().setDelegate(delegate.toProto()).build()
     }
@@ -28,9 +32,9 @@ class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, Fe
         return Text(delegate.batchUpdate(words))
     }
 
-    override fun logProbability(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
         val inputWordCounts = WordCounter.countWords(value)
-        return delegate.logProbability(outcomes, inputWordCounts)
+        return delegate.logPosteriorPredictive(outcomes, inputWordCounts)
     }
 
     object WordCounter {

@@ -10,6 +10,10 @@ import com.tradeshift.blayze.dto.Outcome
  */
 class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue> {
 
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
+            this(Multinomial(includeFeatureProbability, pseudoCount))
+
+
     fun toProto(): Protos.Categorical {
         return Protos.Categorical.newBuilder().setDelegate(delegate.toProto()).build()
     }
@@ -25,8 +29,8 @@ class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<C
         return Categorical(delegate.batchUpdate(categories))
     }
 
-    override fun logProbability(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
         val counts = Counter(value)
-        return delegate.logProbability(outcomes, counts)
+        return delegate.logPosteriorPredictive(outcomes, counts)
     }
 }

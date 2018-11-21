@@ -1,9 +1,10 @@
 # blayze
 
-A fast and flexible Naive Bayes implementation for the JVM written in Kotlin.
+A fast and flexible Bayesian Naive Bayes implementation for the JVM written in Kotlin.
 
  * Fully supports the online learning paradigm, in which data, and even new features, are added as they become available.
  * Reasonably fast and memory efficient. We've trained a document classifier with tens of thousands of classes on hundreds of thousands of documents, and ironed out most of the hot-spots.
+ * Naturally works with few samples, by integrating out the uncertainty on estimated parameters.
  * Models and data structures are immutable such that they are concurrency friendly.
  * Efficient serialization and deserialization using protobuf.
  * Missing and unknown features at prediction time are properly handled.

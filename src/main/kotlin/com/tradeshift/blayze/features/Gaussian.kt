@@ -2,10 +2,24 @@ package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.dto.Outcome
+import com.tradeshift.blayze.logStudentT
 import kotlin.math.*
 
 /**
  * A feature for numbers that approximately follow a normal distribution, e.g. age, amounts, etc.
+ *
+ * Uses a Normal-inverse gamma prior on the parameters of the gaussian. See https://en.wikipedia.org/wiki/Conjugate_prior#Continuous_distributions
+ * and https://en.wikipedia.org/wiki/Student%27s_t-distribution#Generalized_Student's_t-distribution
+ *
+ * Note, after much deliberation we've set the four prior hyper-parameters to zero. For outcomes with zero variance or less than two samples we return
+ * the minimum log probability of the other outcomes. If all the outcomes are undefined (e.g. first time you add a gaussian feature), the feature returns 0 for
+ * all outcomes, effectively ignoring the feature. Yes this is a giant hack, but it works, and after 2 days of fiddling with the hyper-parameters it became
+ * apparent that there'd always be a counter argument against a certain set of hyper priors.
+ *
+ * The current solution satisfies:
+ *  - The gaussian feature is scale and shift invariant, which is very nice (adding priors break this)
+ *  - Adding new outcomes doesn't break the classifier (with priors, new outcomes might be more or less likely than previously observed outcomes with properly estimated distributions, which can quickly overrule other features)
+ *  - Adding new gaussian features doesn't break the classifier (same as above)
  */
 class Gaussian(
         private val estimators: Map<Outcome, StreamingEstimator> = mapOf()
@@ -19,32 +33,45 @@ class Gaussian(
         return Gaussian(map)
     }
 
-    override fun logProbability(outcomes: Set<Outcome>, value: Double): Map<Outcome, Double> {
-        val results = mutableMapOf<Outcome, Double>()
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Double): Map<Outcome, Double> {
+        val results = mutableMapOf<Outcome, Double?>()
         for (outcome in outcomes) {
             results[outcome] = logPropabilityOutcome(outcome, value)
         }
-        return results
+
+        // Giant hack
+        val min = results.values.filterNotNull().min() ?: 0.0
+        return results.map { (k, v) -> k to (v ?: min) }.toMap()
     }
 
-    private fun logPropabilityOutcome(outcome: Outcome, value: Double): Double {
-        // p(x|mu,sigma)        = 1/sqrt(2*pi*sigma^2)              * exp(-(x-mu)^2/(2*sigma^2))
-        // log(p(x|mu, sigma)   = log(1) - log(sqrt(2*pi*sigma^2))  - (x-mu)^2/(2*sigma^2)
-        //                      = -log(sqrt(2*pi*sigma^2))          - (x-mu)^2/(2*sigma^2)
-        //                      = -log(sigma*sqrt(2*pi))            - (x-mu)^2/(2*sigma^2)
-        //                      = -log(sigma) - log(sqrt(2*pi))     - (x-mu)^2/(2*sigma^2)
-        val (mu, sigma) = estimators[outcome] ?: return 0.0
-        if (sigma == 0.0) {
-            return 0.0
+    private fun logPropabilityOutcome(outcome: Outcome, value: Double): Double? {
+        val mu0 = 0.0
+        val nu = 0
+        val beta = 0
+        val alpha = 0
+
+        val est = estimators[outcome]
+        val n = (est?.count ?: 0).toDouble()
+        val mu = est?.mean ?: 0.0
+        val sigma = est?.stdev ?: 0.0
+
+        if (n < 2 || sigma == 0.0) {
+            return null
         }
-        return -ln(sigma) - ln(sqrt(2 * PI)) - (value - mu).pow(2).div(2 * sigma.pow(2))
+
+        val pmu = (nu * mu0 + n * mu) / (nu + n)
+        val pnu = (nu + n)
+        val palpha = (alpha + n / 2.0)
+        val pbeta = (beta + (1.0 / 2.0) * (sigma.pow(2.0) * (n - 1)) + n * nu / (n + nu) * (mu - mu0).pow(2.0) / 2.0)
+
+        return logStudentT(value, 2 * palpha, pmu, sqrt(pbeta * (pnu + 1) / (palpha * pnu)))
     }
 
     /**
      * B. P. Welford (1962). "Note on a method for calculating corrected sums of squares and products".
      */
     class StreamingEstimator private constructor(
-            private val count: Int,
+            val count: Int,
             val mean: Double,
             private val m2: Double
     ) {
@@ -69,11 +96,15 @@ class Gaussian(
             }
         }
 
-        operator fun component1(): Double {
-            return mean
+        operator fun component1(): Int {
+            return count
         }
 
         operator fun component2(): Double {
+            return mean
+        }
+
+        operator fun component3(): Double {
             return stdev
         }
 

@@ -14,6 +14,55 @@ import kotlin.streams.toList
 
 class ModelTest {
 
+    private val priorCounts = mapOf(
+            Pair("p", 1),
+            Pair("n", 3)
+    )
+    private val textFeatures = mapOf(
+            "q" to Text(Multinomial(
+                    1.0,
+                    1.0
+            ).batchUpdate(listOf(
+                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
+            ))),
+            "other_q" to Text(Multinomial(
+                    1.0,
+                    1.0
+            ).batchUpdate(listOf(
+                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
+                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
+            )))
+    )
+
+    private val categoricalFeatures = mapOf(
+            "user" to Categorical(
+                    Multinomial(
+                            1.0,
+                            1.0
+                    ).batchUpdate(
+                            listOf(
+                                    "p" to Counter("ole"),
+                                    "n" to Counter("ole", "bob", "ada")
+                            )
+                    )
+            ),
+            "country" to
+                    Categorical(
+                            Multinomial(
+                                    1.0,
+                                    1.0
+                            ).batchUpdate(
+                                    listOf(
+                                            "p" to Counter("utopia"),
+                                            "n" to Counter("dystopia")
+                                    )
+                            )
+                    )
+    )
+
+    val model = Model(priorCounts, textFeatures, categoricalFeatures)
+
     @Test
     fun categorical_features_can_be_serialized_and_deserialized() {
         val bytes = model.toProto().toByteArray()
@@ -29,20 +78,15 @@ class ModelTest {
 
     @Test
     fun text_features_can_be_serialized_and_deserialized() {
+        val inputs = Inputs(text = mapOf(Pair("q", "awesome awesome awesome ok")))
+        val expected = model.predict(inputs)
+
         val bytes = model.toProto().toByteArray()
         val reconstructed = Model.fromProto(Protos.Model.parseFrom(bytes))
+        val actual = reconstructed.predict(inputs)
 
-        val suggestions = reconstructed.predict(Inputs(text = mapOf(Pair("q", "awesome awesome awesome ok"))))
-
-        // [[0.9268899 0.0731101]] from sklearn
-        assertEquals(setOf("p", "n"), suggestions.keys)
-
-        assertEquals(setOf("p", "n"), suggestions.keys)
-
-        assertEquals(0.9268899, suggestions["p"]!!, 0.0000001)
-        assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
+        assertEquals(expected, actual)
     }
-
 
     @Test(expected = IllegalArgumentException::class)
     fun fails_to_deserialize_proto_with_different_version() {
@@ -62,24 +106,70 @@ class ModelTest {
                         Update(Inputs(gaussian = mapOf(Pair("age", 40.0))), "eur")
                 ))
 
-        val bytes = model.toProto().toByteArray()
-        val reconstructed = Model.fromProto(Protos.Model.parseFrom(bytes))
+        val reconstructed = Model.fromProto(Protos.Model.parseFrom(model.toProto().toByteArray()))
 
-        val predictions = reconstructed.predict(Inputs(gaussian = mapOf(Pair("age", 23.0))))
+        val inputs = Inputs(gaussian = mapOf(Pair("age", 23.0)))
+        val expected = model.predict(inputs)
+        val actual = reconstructed.predict(inputs)
 
-        assertEquals(predictions.keys, setOf("usd", "eur"))
+        assertEquals(expected, actual)
+    }
 
-        var pEUR = 0.0312254 // https://www.wolframalpha.com/input/?i=normalpdf(23.0,+30.0,+10.0)
-        var pUSD = 0.000446108 // https://www.wolframalpha.com/input/?i=normalpdf(23.0,+45.0,+7.0710678118654755)
+    @Test
+    fun outcomes_of_gaussian_features_with_less_than_two_samples_does_not_dominate() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 15.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 19.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 16.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", 21.0))),
+                                "t-shirt"),
+                        Update(Inputs(
+                                gaussian = mapOf(Pair("weather.degree", -10.0))),
+                                "sweater")
+                )
+        )
+        val predictions = model.predict(Inputs(
+                gaussian = mapOf(Pair("weather.degree", 14.0))
+        ))
+        val actual = predictions["t-shirt"]!!
+        assertEquals(0.8, actual, 1e-6)
+    }
 
-        pUSD = pUSD * (2.0 / 5.0)
-        pEUR = pEUR * (3.0 / 5.0)
+    @Test
+    fun adding_a_gaussian_feature_does_not_break_classifier() {
+        val model = Model().batchAdd(
+                listOf(
+                        Update(Inputs(categorical = mapOf("weather.label" to "warm")), "t-shirt"),
+                        Update(Inputs(categorical = mapOf("weather.label" to "warm")), "t-shirt"),
+                        Update(Inputs(categorical = mapOf("weather.label" to "warm")), "t-shirt"),
+                        Update(Inputs(categorical = mapOf("weather.label" to "warm")), "t-shirt"),
+                        Update(Inputs(
+                                categorical = mapOf("weather.label" to "cold"),
+                                gaussian = mapOf(Pair("weather.degree", -10.0))
+                        ),
+                                "sweater")
+                )
+        )
+        val p1 = model.predict(Inputs(
+                categorical = mapOf("weather.label" to "warm"))
+        )
+        val a1 = p1["t-shirt"]!!
+        assertTrue("expected $a1 > 0.9", a1 > 0.9)
 
-        pUSD = pUSD / (pUSD + pEUR)
-        pEUR = 1 - pUSD
-
-        assertEquals(pUSD, predictions["usd"]!!, 0.000001)
-        assertEquals(pEUR, predictions["eur"]!!, 0.000001)
+        val p2 = model.predict(Inputs(
+                categorical = mapOf("weather.label" to "warm"),
+                gaussian = mapOf("weather.degree" to 22.0)
+        ))
+        val a2 = p2["t-shirt"]!!
+        assertTrue("expected $a2 > 0.9", a2 > 0.9)
     }
 
     @Test
@@ -120,7 +210,8 @@ class ModelTest {
     @Test
     fun can_fit_20newsgroup() {
         val train = newsgroup("20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.01)))).batchAdd(train)
+        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.1)))).batchAdd(train)
+
 
         val test = newsgroup("20newsgroup_test.txt")
         val acc = test
@@ -135,7 +226,7 @@ class ModelTest {
                 .toList()
                 .average()
 
-        assertTrue(acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
+        assertTrue("expected $acc > 0.65", acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
     }
 
 
@@ -156,8 +247,8 @@ class ModelTest {
 
         assertEquals(predictions.keys, setOf("usd", "eur"))
 
-        var pEUR = 0.0312254 // https://www.wolframalpha.com/input/?i=normalpdf(23.0,+30.0,+10.0)
-        var pUSD = 0.000446108 // https://www.wolframalpha.com/input/?i=normalpdf(23.0,+45.0,+7.0710678118654755)
+        var pEUR = 0.02782119452355812 // d = np.array([20, 30, 40]); n=d.size; scipy.stats.t.pdf(23.0, n, d.mean(), d.var()*(n+1)/n))
+        var pUSD = 0.002837354211344904 // d = np.array([40, 50]); n=d.size; scipy.stats.t.pdf(23.0, n, d.mean(), d.var()*(n+1)/n))
 
         pUSD = pUSD * (2.0 / 5.0)
         pEUR = pEUR * (3.0 / 5.0)
@@ -170,8 +261,16 @@ class ModelTest {
     }
 
     @Test
+    fun can_fit_iris_dataset() {
+        val iris = iris()
+        val model = Model().batchAdd(iris)
+        val correct = iris.map { if (model.predict(it.inputs).maxBy { it.value }!!.key == it.outcome) 1 else 0 }.sum()
+        assertEquals(143, correct) // sklearn.naive_bayes.GaussianNB gets 144/150 correct.
+    }
+
+    @Test
     fun can_batch_add_categorical_features() {
-        val model = Model().batchAdd(
+        val model = Model(categoricalFeatures = mapOf("user" to Categorical(pseudoCount = 1.0))).batchAdd(
                 listOf(
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "usd"),
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "eur")
@@ -204,41 +303,39 @@ class ModelTest {
 
     @Test
     fun can_batch_add_text_features() {
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial()))).batchAdd(
+        val model = Model().batchAdd(
                 listOf(
-                        Update(Inputs(text = mapOf(Pair("q", "foo bar baz"))), "positive"),
-                        Update(Inputs(text = mapOf(Pair("q", "foo foo bar baz zap zoo"))), "negative")
+                        Update(Inputs(text = mapOf(Pair("q", "foo bar baz"))), "p"),
+                        Update(Inputs(text = mapOf(Pair("q", "foo foo bar baz zap zoo"))), "n")
 
                 )).batchAdd(
                 listOf(
-                        Update(Inputs(text = mapOf(Pair("q", "map pap mee zap"))), "negative")
+                        Update(Inputs(text = mapOf(Pair("q", "map pap mee zap"))), "n")
                 )
         )
-        val predictions = model.predict(Inputs(text = mapOf(Pair("q", "foo"))))
+        val actual = model.predict(Inputs(text = mapOf(Pair("q", "foo"))))
 
-        assertEquals(predictions.keys, setOf("positive", "negative"))
+        val f = Text().batchUpdate(listOf(
+                "p" to "foo bar baz",
+                "n" to "foo foo bar baz zap zoo",
+                "n" to "map pap mee zap"
+        ))
 
-        val nUniqueWords = 8.0
-        val nPositiveWords = 3.0
-        val nNegativeWords = 10.0
-        val nFooPositive = 1.0
-        val nFooNegative = 2.0
-        val nPositive = 1.0
-        val nNegative = 2.0
-        val nPseudoCount = 1.0
-        val up = nPositive / (nPositive + nNegative) * ((nFooPositive + nPseudoCount) / (nPositiveWords + nUniqueWords * nPseudoCount))
-        val un = nNegative / (nPositive + nNegative) * ((nFooNegative + nPseudoCount) / (nNegativeWords + nUniqueWords * nPseudoCount))
-        val p = up / (up + un)
-        val n = 1 - p
+        val pq = f.logPosteriorPredictive(setOf("p", "n"), "foo")
 
-        assertEquals(p, predictions["positive"]!!, 0.000001)
-        assertEquals(n, predictions["negative"]!!, 0.000001)
+        val up = Math.exp(Math.log(1.0) + pq["p"]!!)
+        val un = Math.exp(Math.log(2.0) + pq["n"]!!)
+
+        val pp = up / (up + un)
+        val pn = 1.0 - pp
+
+        assertEquals(pp, actual["p"]!!, 1e-6)
+        assertEquals(pn, actual["n"]!!, 1e-6)
     }
 
     @Test
     fun single_categorical_feature_give_correct_probability() {
         val suggestions = model.predict(Inputs(categorical = mapOf(Pair("user", "ole"))))
-
         /*
         Expected probabilities:
 
@@ -263,14 +360,14 @@ class ModelTest {
 
     @Test
     fun multiple_categorical_features_give_correct_probabilities() {
-        val suggestions = model.predict(Inputs(categorical = mapOf(Pair("user", "ole"), Pair("contry", "dystopia"))))
+        val suggestions = model.predict(Inputs(categorical = mapOf(Pair("user", "ole"), Pair("country", "dystopia"))))
 
         val contyPosP = (0.0 + 1.0) / (1.0 + 2.0)
-        val contryPosN = (1.0 + 1.0) / (1.0 + 2.0)
+        val countryPosN = (1.0 + 1.0) / (1.0 + 2.0)
 
-        val norm = (0.333333333 * contyPosP) + (0.666666666 * contryPosN)
+        val norm = (0.333333333 * contyPosP) + (0.666666666 * countryPosN)
         val pos = (0.333333333 * contyPosP) / norm
-        val neg = (0.666666666 * contryPosN) / norm
+        val neg = (0.666666666 * countryPosN) / norm
 
         assertEquals(setOf("p", "n"), suggestions.keys)
 
@@ -284,25 +381,33 @@ class ModelTest {
     fun single_text_feature_gives_correct_probabilities() {
         val suggestions = model.predict(Inputs(text = mapOf(Pair("q", "awesome awesome awesome ok"))))
 
-        // [[0.9268899 0.0731101]] from sklearn
-        assertEquals(setOf("p", "n"), suggestions.keys)
+        val pq = textFeatures["q"]!!.logPosteriorPredictive(setOf("p", "n"), "awesome awesome awesome ok")
 
-        assertEquals(setOf("p", "n"), suggestions.keys)
+        val up = Math.exp(Math.log(priorCounts["p"]!!.toDouble()) + pq["p"]!!)
+        val un = Math.exp(Math.log(priorCounts["n"]!!.toDouble()) + pq["n"]!!)
 
-        assertEquals(0.9268899, suggestions["p"]!!, 0.0000001)
-        assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
+        val pp = up / (up + un)
+        val pn = 1.0 - pp
+
+        assertEquals(pp, suggestions["p"]!!, 1e-6)
+        assertEquals(pn, suggestions["n"]!!, 1e-6)
     }
 
     @Test
     fun multiple_text_features_gives_correct_probability() {
         val suggestions = model.predict(Inputs(text = mapOf(Pair("q", "awesome ok"), Pair("other_q", "awesome awesome"))))
 
-        assertEquals(setOf("p", "n"), suggestions.keys)
+        val pq = textFeatures["q"]!!.logPosteriorPredictive(setOf("p", "n"), "awesome ok")
+        val pq2 = textFeatures["other_q"]!!.logPosteriorPredictive(setOf("p", "n"), "awesome awesome")
 
-        assertEquals(setOf("p", "n"), suggestions.keys)
+        val up = Math.exp(Math.log(priorCounts["p"]!!.toDouble()) + pq["p"]!! + pq2["p"]!!)
+        val un = Math.exp(Math.log(priorCounts["n"]!!.toDouble()) + pq["n"]!! + pq2["n"]!!)
 
-        assertEquals(0.9268899, suggestions["p"]!!, 0.0000001)
-        assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
+        val pp = up / (up + un)
+        val pn = 1.0 - pp
+
+        assertEquals(pp, suggestions["p"]!!, 1e-6)
+        assertEquals(pn, suggestions["n"]!!, 1e-6)
     }
 
     @Test
@@ -314,22 +419,18 @@ class ModelTest {
                 )
         )
 
-        assertEquals(setOf("p", "n"), suggestions.keys)
-        assertEquals(setOf("p", "n"), suggestions.keys)
+        val pq = textFeatures["q"]!!.logPosteriorPredictive(setOf("p", "n"), "awesome ok")
+        val pq2 = textFeatures["other_q"]!!.logPosteriorPredictive(setOf("p", "n"), "awesome awesome")
+        val pq3 = categoricalFeatures["user"]!!.logPosteriorPredictive(setOf("p", "n"), "ole")
 
-        val categoricalPosteriorP = 0.5
-        val categoricalPosteriorN = 0.33333333
+        val up = Math.exp(Math.log(priorCounts["p"]!!.toDouble()) + pq["p"]!! + pq2["p"]!! + pq3["p"]!!)
+        val un = Math.exp(Math.log(priorCounts["n"]!!.toDouble()) + pq["n"]!! + pq2["n"]!! + pq3["n"]!!)
 
-        val textPriorAndPosteriorP = 0.9268899
-        val textPriorAndPosteriorN = 0.0731101
+        val pp = up / (up + un)
+        val pn = 1.0 - pp
 
-        val norm = (categoricalPosteriorP * textPriorAndPosteriorP) + (categoricalPosteriorN * textPriorAndPosteriorN)
-
-        val pos = (categoricalPosteriorP * textPriorAndPosteriorP) / norm
-        val neg = (categoricalPosteriorN * textPriorAndPosteriorN) / norm
-
-        assertEquals(pos, suggestions["p"]!!, 0.0000001)
-        assertEquals(neg, suggestions["n"]!!, 0.0000001)
+        assertEquals(pp, suggestions["p"]!!, 1e-6)
+        assertEquals(pn, suggestions["n"]!!, 1e-6)
     }
 
     @Test
@@ -343,99 +444,16 @@ class ModelTest {
     }
 
     @Test
-    fun unseen_features_default_to_prior() {
+    fun unseen_features_are_ignored_at_prediction_time() {
         val suggestions = model.predict(Inputs(
-                mapOf(Pair("q", "k k k k k k k k k k k k k k k k k")),
-                mapOf(Pair("user", "notseen"))
+                mapOf(Pair("q2", "k k k k k k k k k k k k k k k k k")),
+                mapOf(Pair("user2", "notseen"))
         ))
         assertEquals(setOf("p", "n"), suggestions.keys)
 
         assertEquals(0.25, suggestions["p"]!!, 0.0000001)
         assertEquals(0.75, suggestions["n"]!!, 0.0000001)
     }
-
-    @Test
-    fun special_chars_are_replaced_by_space() {
-        val suggestions = model.predict(Inputs(text = mapOf(Pair("q", "awesome.!!    awesome;;;awesome \t\n ok"))))
-
-        // [[0.9268899 0.0731101]] from sklearn
-        assertEquals(setOf("p", "n"), suggestions.keys)
-
-        assertEquals(setOf("p", "n"), suggestions.keys)
-
-        assertEquals(0.9268899, suggestions["p"]!!, 0.0000001)
-        assertEquals(0.0731101, suggestions["n"]!!, 0.0000001)
-    }
-
-    private val model: Model
-        get() {
-            val priorCounts = mapOf(
-                    Pair("p", 1),
-                    Pair("n", 3)
-            )
-
-            val textFeatures = mapOf(
-                    Pair(
-                            "q",
-                            Text(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
-                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
-                                            )
-                                    )
-                            )
-
-                    ),
-                    Pair(
-                            "other_q",
-                            Text(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter(mapOf("awesome" to 7, "terrible" to 3, "ok" to 19)),
-                                                    "n" to Counter(mapOf("awesome" to 2, "terrible" to 13, "ok" to 21))
-                                            )
-                                    )
-                            )
-                    ))
-
-            val categoricalFeatures = mapOf(Pair(
-                    "user",
-                    Categorical(
-                            Multinomial(
-                                    1.0,
-                                    1.0
-                            ).batchUpdate(
-                                    listOf(
-                                            "p" to Counter("ole"),
-                                            "n" to Counter("ole", "bob", "ada")
-                                    )
-                            )
-                    )
-            ),
-                    Pair(
-                            "contry",
-                            Categorical(
-                                    Multinomial(
-                                            1.0,
-                                            1.0
-                                    ).batchUpdate(
-                                            listOf(
-                                                    "p" to Counter("utopia"),
-                                                    "n" to Counter("dystopia")
-                                            )
-                                    )
-                            )
-                    ))
-
-            return Model(priorCounts, textFeatures, categoricalFeatures)
-        }
 
 
     fun newsgroup(fname: String): List<Update> {
@@ -450,6 +468,25 @@ class ModelTest {
                 f = Inputs(mapOf("q" to split[1]))
             }
             updates.add(Update(f, outcome))
+        }
+        return updates
+    }
+
+    fun iris(): List<Update> {
+        val lines = this::class.java.getResource("iris.csv").readText(Charsets.UTF_8).split("\n")
+        val updates = mutableListOf<Update>()
+        for (s in lines.drop(1)) {
+            val split = s.split(",")
+            updates.add(Update(Inputs(
+                    gaussian = mapOf(
+                            "sepal_length" to split[0].toDouble(),
+                            "sepal_width" to split[1].toDouble(),
+                            "petal_length" to split[2].toDouble(),
+                            "petal_width" to split[3].toDouble()
+
+                    )),
+                    split.last())
+            )
         }
         return updates
     }

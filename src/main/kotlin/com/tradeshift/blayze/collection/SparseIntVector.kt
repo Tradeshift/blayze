@@ -8,7 +8,7 @@ import java.util.TreeMap
 /**
  * A sparse vector that stores non-zero indices and values in primitive arrays.
  */
-class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray): Iterable<Pair<Int, Int>> {
+class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray) : Iterable<Pair<Int, Int>> {
 
     fun add(other: SparseIntVector): SparseIntVector {
         val m = TreeMap<Int, Int>()
@@ -28,7 +28,6 @@ class SparseIntVector private constructor(private val indices: IntArray, private
 
 
     companion object {
-
         private fun toIntArray(bytes: ByteString): IntArray {
             val buffer = bytes.asReadOnlyByteBuffer().asIntBuffer()
             val arr = IntArray(buffer.remaining())
