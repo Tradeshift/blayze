@@ -63,7 +63,7 @@ class Model(
 
     fun toProto(): Protos.Model {
         return Protos.Model.newBuilder()
-                .setModelVersion(Model.version)
+                .setModelVersion(Model.serializationVersion)
                 .putAllPriorCounts(priorCounts)
                 .putAllTextFeatures(textFeatures.mapValues { it.value.toProto() })
                 .putAllCategoricalFeatures(categoricalFeatures.mapValues { it.value.toProto() })
@@ -73,11 +73,11 @@ class Model(
     }
 
     companion object {
-        private const val version = 3
+        private const val serializationVersion = 3
 
         fun fromProto(proto: Protos.Model): Model {
-            if (proto.modelVersion != version) {
-                throw IllegalArgumentException("This version of blayze requires protobuf model version $version " +
+            if (proto.modelVersion != serializationVersion) {
+                throw IllegalArgumentException("This version of blayze requires protobuf model version $serializationVersion " +
                         "Attempted to load protobuf with version ${proto.modelVersion}")
             }
             return Model(
