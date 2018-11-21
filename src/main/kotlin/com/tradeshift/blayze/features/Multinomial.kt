@@ -57,7 +57,14 @@ class Multinomial private constructor(
     }
 
 
-    // See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution#Dirichlet-multinomial_as_a_compound_distribution
+    /*
+     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution#Dirichlet-multinomial_as_a_compound_distribution
+     This implementation could be a lot simpler by iterating over every outcome and then every feature in value (e.g. words)
+     If N is the number of outcomes, and W is the number of words in value that would cost O(NW).
+     We assume the occurrence of words are sparse, such that on average A outcomes have non-zero counts for a given word.
+     The current implementation uses this to achieve O(W+N+AW). It does this by first computing the posterior predictive assuming
+     every outcome has observed every word 0 times in O(W+N). Then it corrects the mistakes it made in O(AW).
+     */
     override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
         val n = value.values.sum()
         if (n == 0 || features.isEmpty()) { // empty input or empty model
@@ -65,9 +72,9 @@ class Multinomial private constructor(
         }
 
         val result = mutableMapOf<String, Double>()
-        val logBetaZeroCounts = value.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) }
+        val logBetaZeroCounts = value.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) } //O(W)
         val logBetaZeroCountsSum = logBetaZeroCounts.map { it.value }.sum()
-        for (outcome in outcomes) {
+        for (outcome in outcomes) { //O(N)
             val outcomeIdx = outcomeToIdx[outcome]
             val alpha_0 = if (outcomeIdx != null) {
                 nFeaturesPerOutcome[outcomeIdx]
@@ -75,14 +82,14 @@ class Multinomial private constructor(
                 0
             }
             val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * pseudoCount, n.toDouble())
-            result[outcome] = numerator - logBetaZeroCountsSum //assuming every class has seen every word 0 times
+            result[outcome] = numerator - logBetaZeroCountsSum //assuming every outcome has seen every word 0 times
         }
 
-        for ((word, count) in value) {
+        for ((word, count) in value) { //O(W)
             val alpha_kc = features[word]
             if (alpha_kc != null) {
                 val wrong = logBetaZeroCounts[word]!!
-                for ((outcomeIdx, i) in alpha_kc) {
+                for ((outcomeIdx, i) in alpha_kc) { //O(A)
                     val outcome = idxToOutcome[outcomeIdx]!!
                     val prev = result[outcome]
                     if (prev != null) { //outcomes may be a subset of all the outcomes we've observed
