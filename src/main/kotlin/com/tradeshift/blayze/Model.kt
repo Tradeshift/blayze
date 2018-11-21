@@ -58,7 +58,7 @@ class Model(
 
     // Categorical distribution with dirichlet prior, see https://en.wikipedia.org/wiki/Conjugate_prior#Discrete_distributions
     private val logPrior: Map<String, Double> by lazy {
-        priorCounts.mapValues { Math.log(pseudoCount + it.value.toDouble()) }
+        priorCounts.mapValues { Math.log(pseudoCount + it.value.toDouble()) } // We don't need to subtract the log(total count), since that is constant w.r.t outcomes, so is normalized away later.
     }
 
     fun toProto(): Protos.Model {
