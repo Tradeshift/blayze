@@ -1,12 +1,9 @@
 import com.tradeshift.blayze.Model
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
-import com.tradeshift.blayze.features.Categorical
-import com.tradeshift.blayze.features.Multinomial
 import org.junit.Assert
 import org.junit.Test
 import kotlin.streams.toList
-
 
 class UCIAdultDataSetTest {
 
@@ -34,8 +31,7 @@ class UCIAdultDataSetTest {
     @Test
     fun can_fit_uci_adult_dataset() {
         val train = uciAdult("adult.train.txt")
-        val model = Model(categoricalFeatures = mapOf("q" to Categorical(Multinomial(pseudoCount = 0.1))))
-                .batchAdd(train)
+        val model = Model().batchAdd(train)
 
         val test = uciAdult("adult.test.txt")
         val acc = test
