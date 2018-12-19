@@ -16,6 +16,18 @@ class MultinomialTest {
     }
 
     @Test
+    fun test_unseen_words_are_ignored() {
+        val f = Multinomial(1.0, 1.0).batchUpdate(listOf(
+                "p" to Counter("foo", "foo", "bar"),
+                "n" to Counter("foo", "bar", "baz")
+        ))
+        val lp1 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz"))
+        val lp2 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz", "zap"))
+        assertEquals(lp1["p"]!!, lp2["p"]!!, 0.0)
+        assertEquals(lp1["n"]!!, lp2["n"]!!, 0.0)
+    }
+
+    @Test
     fun test_log_posterior_predictive_approaches_mle_multinomial_as_samples_approaches_infinity() {
         val n = 1000
         val updates = (0..n).flatMap {

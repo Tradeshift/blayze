@@ -66,13 +66,15 @@ class Multinomial private constructor(
      every outcome has observed every word 0 times in O(W+N). Then it corrects the mistakes it made in O(AW).
      */
     override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
-        val n = value.values.sum()
+        val filtered = value.filter { features[it.key] != null } //hack, ensures unseen words does not influence posterior of outcomes
+
+        val n = filtered.values.sum()
         if (n == 0 || features.isEmpty()) { // empty input or empty model
             return outcomes.map { it to 0.0 }.toMap()
         }
 
         val result = mutableMapOf<String, Double>()
-        val logBetaZeroCounts = value.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) } //O(W)
+        val logBetaZeroCounts = filtered.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) } //O(W)
         val logBetaZeroCountsSum = logBetaZeroCounts.map { it.value }.sum()
         for (outcome in outcomes) { //O(N)
             val outcomeIdx = outcomeToIdx[outcome]
@@ -85,7 +87,7 @@ class Multinomial private constructor(
             result[outcome] = numerator - logBetaZeroCountsSum //assuming every outcome has seen every word 0 times
         }
 
-        for ((word, count) in value) { //O(W)
+        for ((word, count) in filtered) { //O(W)
             val alpha_kc = features[word]
             if (alpha_kc != null) {
                 val wrong = logBetaZeroCounts[word]!!
