@@ -21,8 +21,8 @@ class GaussianTest {
                         "b" to 20.0,
                         "c" to 90.0
                 )
-        )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c", "d"), 20.0)
+                , null)
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c", "d"), 20.0, null)
 
         assertTrue { predictive["b"]!! > predictive["a"]!! }
         assertEquals(predictive["a"]!!, predictive["c"]!!, 1e-6)
@@ -39,8 +39,8 @@ class GaussianTest {
                         "t-shirt" to scale * 19.0 + shift,
                         "sweater" to scale * -10.0 + shift,
                         "sweater" to scale * -20.0 + shift
-                ))
-                val actual = model.logPosteriorPredictive(setOf("t-shirt", "sweater"), scale * 8.0 + shift)
+                ), null)
+                val actual = model.logPosteriorPredictive(setOf("t-shirt", "sweater"), scale * 8.0 + shift, null)
 
                 assertEquals(expected, actual["t-shirt"]!! - actual["sweater"]!!, 1e-6)
             }
@@ -55,8 +55,8 @@ class GaussianTest {
                         "b" to 20.0,
                         "b" to 20.0
                 )
-        )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0)
+                , null)
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0, null)
 
         assertEquals(0.0, predictive["a"]!!, 1e-6)
         assertEquals(0.0, predictive["b"]!!, 1e-6)
@@ -77,8 +77,8 @@ class GaussianTest {
                         "c" to 90.0,
                         "c" to 90.0
                 )
-        )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0)
+                , null)
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0, null)
 
         assertTrue { predictive["b"]!! > predictive["a"]!! }
         assertEquals(predictive["a"]!!, predictive["c"]!!, 1e-6)
@@ -92,12 +92,12 @@ class GaussianTest {
                         "p" to 30.0,
                         "p" to 40.0
                 )
-        )
+                , null)
 
         val expected = 0.02782119452355812 // d = np.array([20, 30, 40]); n=d.size; scipy.stats.t.pdf(23.0, n, d.mean(), d.var()*(n+1)/n))
 
         val x = 23.0
-        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x)["p"]!!)
+        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, null)["p"]!!)
 
         assertEquals(expected, actual, 0.000001)
     }
@@ -108,7 +108,7 @@ class GaussianTest {
 
         val gaussian = Gaussian().batchUpdate(
                 numbers.map { "p" to it }
-        )
+                , null)
 
         val mean = numbers.sum() / numbers.size
         val variance = numbers.map { (it - mean).pow(2) }.sum() / (numbers.size - 1)
@@ -117,7 +117,7 @@ class GaussianTest {
         for (i in (-200..200)) {
             val x = mean + i / 100.0 * std // mean +- 2stddev
             val expected = ln(1.0 / sqrt(2 * PI * variance) * exp(-(x - mean).pow(2) / (2 * variance)))
-            assertEquals(expected, gaussian.logPosteriorPredictive(setOf("p"), x)["p"]!!, 0.001)
+            assertEquals(expected, gaussian.logPosteriorPredictive(setOf("p"), x, null)["p"]!!, 0.001)
         }
     }
 
@@ -128,10 +128,10 @@ class GaussianTest {
                         "p" to 1.0,
                         "p" to 2.0,
                         "n" to 3.0
-                )).batchUpdate(listOf(
+                ), null).batchUpdate(listOf(
                         "p" to 3.0,
                         "n" to 2.0
-                ))
+                ), null)
 
         val expected = Gaussian(mapOf(
                 "p" to StreamingEstimator(1.0).add(2.0).add(3.0),
@@ -139,7 +139,7 @@ class GaussianTest {
         ))
 
         val x = 2.4212
-        assertEquals(expected.logPosteriorPredictive(setOf("p"), x), actual.logPosteriorPredictive(setOf("p"), x))
-        assertEquals(expected.logPosteriorPredictive(setOf("n"), x), actual.logPosteriorPredictive(setOf("n"), x))
+        assertEquals(expected.logPosteriorPredictive(setOf("p"), x, null), actual.logPosteriorPredictive(setOf("p"), x, null))
+        assertEquals(expected.logPosteriorPredictive(setOf("n"), x, null), actual.logPosteriorPredictive(setOf("n"), x, null))
     }
 }

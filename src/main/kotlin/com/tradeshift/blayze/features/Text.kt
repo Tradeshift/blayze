@@ -11,7 +11,7 @@ import com.tradeshift.blayze.dto.Outcome
  *
  * The pre-processing replaces all non-letters and non-numbers with spaces, lowercases, splits on spaces and finally removes english stopwords.
  */
-class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue> {
+class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue, Multinomial.PseudoCount, Multinomial.IncludeFeatureProbability> {
 
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
             this(Multinomial(includeFeatureProbability, pseudoCount))
@@ -27,14 +27,14 @@ class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, Fe
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>): Text {
+    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, params: Multinomial.IncludeFeatureProbability?): Text {
         val words = updates.map { Pair(it.first, WordCounter.countWords(it.second)) }
-        return Text(delegate.batchUpdate(words))
+        return Text(delegate.batchUpdate(words, params))
     }
 
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, params: Multinomial.PseudoCount?): Map<Outcome, Double> {
         val inputWordCounts = WordCounter.countWords(value)
-        return delegate.logPosteriorPredictive(outcomes, inputWordCounts)
+        return delegate.logPosteriorPredictive(outcomes, inputWordCounts, params)
     }
 
     object WordCounter {

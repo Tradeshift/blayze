@@ -8,13 +8,17 @@ import com.tradeshift.blayze.logBeta
 import java.lang.Math.log
 import kotlin.math.pow
 
+
+
 class Multinomial private constructor(
-        private val includeFeatureProbability: Double = 1.0,
-        private val pseudoCount: Double = 0.1,
+        private val defaultIncludeFeatureProbability: Double = 1.0,
+        private val defaultPseudoCount: Double = 0.1,
         private val outcomeToIdx: Map<Outcome, Int>,
         private val features: Map<String, SparseIntVector>
-) : Feature<Multinomial, Counter<String>> {
+) : Feature<Multinomial, Counter<String>, Multinomial.PseudoCount, Multinomial.IncludeFeatureProbability> {
 
+    data class IncludeFeatureProbability(val probability: Double)
+    data class PseudoCount(val count: Double)
     /**
      * A feature for multinomial data.
      *
@@ -41,19 +45,19 @@ class Multinomial private constructor(
         outcomeToIdx.map { it.value to it.key }.toMap()
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
+    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>, params: IncludeFeatureProbability?): Multinomial {
         val featuresCopy = features.toMutableMap()
         val outcomesCopy = outcomeToIdx.toMutableMap()
 
         fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key) { outcomesCopy.size }
-
-        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence()))
+        val includeFeatureProbability = params?.probability ?: defaultIncludeFeatureProbability
+        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence(), includeFeatureProbability))
         for ((feature, counter) in formattedUpdates) {
             val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
             val vec = SparseIntVector.fromMap(indexToUpdate)
             featuresCopy[feature] = featuresCopy[feature]?.add(vec) ?: vec
         }
-        return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
+        return Multinomial(defaultIncludeFeatureProbability, defaultPseudoCount, outcomesCopy, featuresCopy)
     }
 
 
@@ -65,8 +69,9 @@ class Multinomial private constructor(
      The current implementation uses this to achieve O(W+N+AW). It does this by first computing the posterior predictive assuming
      every outcome has observed every word 0 times in O(W+N). Then it corrects the mistakes it made in O(AW).
      */
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>, params: PseudoCount?): Map<Outcome, Double> {
         val filtered = value.filter { features[it.key] != null } //hack, ensures unseen words does not influence posterior of outcomes
+        val pseudoCount = params?.count ?: defaultPseudoCount
 
         val n = filtered.values.sum()
         if (n == 0 || features.isEmpty()) { // empty input or empty model
@@ -105,7 +110,7 @@ class Multinomial private constructor(
         return result
     }
 
-    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
+    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>, includeFeatureProbability: Double): Sequence<Pair<Outcome, Counter<String>>> {
         fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
         val knownFeatures = features.keys.toMutableSet()
         return updates.map { (outcome, counter) ->
@@ -127,8 +132,8 @@ class Multinomial private constructor(
     }
 
     fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
-            .setIncludeFeatureProbability(includeFeatureProbability)
-            .setPseudoCount(pseudoCount)
+            .setIncludeFeatureProbability(defaultIncludeFeatureProbability)
+            .setPseudoCount(defaultPseudoCount)
             .putAllOutcomes(outcomeToIdx)
             .putAllFeatures(features.mapValues { it.value.toProto() })
             .build()

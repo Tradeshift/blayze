@@ -23,9 +23,9 @@ import kotlin.math.*
  */
 class Gaussian(
         private val estimators: Map<Outcome, StreamingEstimator> = mapOf()
-) : Feature<Gaussian, Double> {
+) : Feature<Gaussian, Double, Any, Any> {
 
-    override fun batchUpdate(updates: List<Pair<Outcome, Double>>): Gaussian {
+    override fun batchUpdate(updates: List<Pair<Outcome, Double>>, params: Any?): Gaussian {
         val map = estimators.toMutableMap()
         for ((outcome, x) in updates) {
             map[outcome] = map[outcome]?.add(x) ?: StreamingEstimator(x)
@@ -33,7 +33,7 @@ class Gaussian(
         return Gaussian(map)
     }
 
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Double): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Double, params: Any?): Map<Outcome, Double> {
         val results = mutableMapOf<Outcome, Double?>()
         for (outcome in outcomes) {
             results[outcome] = logPropabilityOutcome(outcome, value)

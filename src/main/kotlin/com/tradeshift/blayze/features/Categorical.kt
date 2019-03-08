@@ -8,7 +8,7 @@ import com.tradeshift.blayze.dto.Outcome
 /**
  * A feature for categorical data, i.e. 1 of K data, e.g. user-ids, countries, etc.
  */
-class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue> {
+class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue, Multinomial.PseudoCount, Multinomial.IncludeFeatureProbability> {
 
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
             this(Multinomial(includeFeatureProbability, pseudoCount))
@@ -24,13 +24,13 @@ class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<C
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>): Categorical {
+    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, params: Multinomial.IncludeFeatureProbability?): Categorical {
         val categories = updates.map { Pair(it.first, Counter(it.second)) }
-        return Categorical(delegate.batchUpdate(categories))
+        return Categorical(delegate.batchUpdate(categories, params))
     }
 
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, params: Multinomial.PseudoCount?): Map<Outcome, Double> {
         val counts = Counter(value)
-        return delegate.logPosteriorPredictive(outcomes, counts)
+        return delegate.logPosteriorPredictive(outcomes, counts, params)
     }
 }

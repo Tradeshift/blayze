@@ -10,7 +10,7 @@ class MultinomialTest {
     @Test
     fun test_empty_multinomial() {
         val empty = Multinomial(1.0, 1.0)
-        val logProb = empty.logPosteriorPredictive(setOf("p", "n"), Counter("a", "b", "c"))
+        val logProb = empty.logPosteriorPredictive(setOf("p", "n"), Counter("a", "b", "c"), null)
         assertEquals(0.0, logProb["p"])
         assertEquals(0.0, logProb["n"])
     }
@@ -20,9 +20,9 @@ class MultinomialTest {
         val f = Multinomial(1.0, 1.0).batchUpdate(listOf(
                 "p" to Counter("foo", "foo", "bar"),
                 "n" to Counter("foo", "bar", "baz")
-        ))
-        val lp1 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz"))
-        val lp2 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz", "zap"))
+        ), null)
+        val lp1 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz"), null)
+        val lp2 = f.logPosteriorPredictive(setOf("p", "n"), Counter("foo", "bar", "baz", "zap"), null)
         assertEquals(lp1["p"]!!, lp2["p"]!!, 0.0)
         assertEquals(lp1["n"]!!, lp2["n"]!!, 0.0)
     }
@@ -37,8 +37,8 @@ class MultinomialTest {
             )
         }
         val pseudoCount = 1.0
-        val multinomial = Multinomial(1.0, pseudoCount).batchUpdate(updates)
-        val actual = multinomial.logPosteriorPredictive(setOf("p", "n"), Counter("a", "b"))
+        val multinomial = Multinomial(1.0, pseudoCount).batchUpdate(updates, null)
+        val actual = multinomial.logPosteriorPredictive(setOf("p", "n"), Counter("a", "b"), null)
 
         assertEquals(2, actual.size)
 
@@ -71,8 +71,8 @@ class MultinomialTest {
         val multinomial = Multinomial(1.0, 1.0).batchUpdate(listOf(
                 "p" to Counter("a", "b"),
                 "n" to Counter("b", "c")
-        ))
-        val logProb = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
+        ), null)
+        val logProb = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"), null)
 
         assertEquals(-1.3217559, logProb["p"]!!, 1e-6)
         assertEquals(-2.014903, logProb["n"]!!, 1e-6)

@@ -7,6 +7,8 @@ import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Categorical
 import com.tradeshift.blayze.features.Feature
 import com.tradeshift.blayze.features.Gaussian
+import com.tradeshift.blayze.features.Multinomial.IncludeFeatureProbability
+import com.tradeshift.blayze.features.Multinomial.PseudoCount
 import com.tradeshift.blayze.features.Text
 
 /**
@@ -95,16 +97,16 @@ class Model(
      *
      * @return predicted outcomes and their probability, e.g. {"positive": 0.3124, "negative": 0.6876}
      */
-    fun predict(inputs: Inputs): Map<Outcome, Double> {
+    fun predict(inputs: Inputs, pseudoCounts: Map<FeatureName, PseudoCount>): Map<Outcome, Double> {
         if (priorCounts.isEmpty()) {
             return mapOf()
         }
 
         val maps = mutableListOf<Map<Outcome, Double>>()
         maps.add(logPrior)
-        maps.addAll(logProbabilities(textFeatures, inputs.text))
-        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical))
-        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian))
+        maps.addAll(logProbabilities(textFeatures, inputs.text, pseudoCounts))
+        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, pseudoCounts))
+        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, mapOf()))
 
         return normalize(sumMaps(maps))
     }
@@ -112,8 +114,8 @@ class Model(
     /**
      * Creates a new model with the [Update] added.
      */
-    fun add(update: Update): Model {
-        return batchAdd(listOf(update))
+    fun add(update: Update, includeFeatureProbability: Map<FeatureName, IncludeFeatureProbability>): Model {
+        return batchAdd(listOf(update), includeFeatureProbability)
     }
 
     /**
@@ -122,22 +124,23 @@ class Model(
      * @param updates List of observed updates
      * @return new updated Model
      */
-    fun batchAdd(updates: List<Update>): Model {
+    fun batchAdd(updates: List<Update>, includeFeatureProbability: Map<FeatureName, IncludeFeatureProbability>): Model {
         val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
 
-        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical })
-        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text })
-        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian })
+        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, includeFeatureProbability)
+        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, includeFeatureProbability)
+        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, mapOf())
 
         return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures)
     }
 
-    private fun <F, V> logProbabilities(features: Map<FeatureName, Feature<F, V>>, values: Map<FeatureName, V>): List<Map<Outcome, Double>> {
+    private fun <F, V, P, U> logProbabilities(features: Map<FeatureName, Feature<F, V, P, U>>, values: Map<FeatureName, V>, parameters: Map<FeatureName, P>): List<Map<Outcome, Double>> {
         val maps = mutableListOf<Map<Outcome, Double>>()
         for ((featureName, featureValue) in values) {
             val feature = features[featureName]
+            val params = parameters[featureName]
             if (feature != null) {
-                val logPosteriorPredictive = feature.logPosteriorPredictive(logPrior.keys, featureValue)
+                val logPosteriorPredictive = feature.logPosteriorPredictive(logPrior.keys, featureValue, params)
                 assert(logPosteriorPredictive.keys == logPrior.keys) {
                     "$featureName outcomes did not match logPrior outcomes. Expected ${logPrior.keys}, Actual: ${logPosteriorPredictive.keys}"
                 }
@@ -166,11 +169,12 @@ class Model(
     }
 
 
-    private fun <V, F : Feature<F, V>> updateFeatures(
+    private fun <U, P, V, F : Feature<F, V, P, U>> updateFeatures(
             old: Map<FeatureName, F>,
             creator: () -> F,
             updates: List<Update>,
-            extractor: (Inputs) -> Map<FeatureName, V>): Map<FeatureName, F> {
+            extractor: (Inputs) -> Map<FeatureName, V>,
+            params: Map<FeatureName, U>): Map<FeatureName, F> {
 
         val outcomes = updates.map { it.outcome }
         val values = updates.map { extractor(it.inputs) }
@@ -179,7 +183,7 @@ class Model(
         val features = old.toMutableMap()
         for ((name, pairs) in data) {
             val f = features.getOrDefault(name, creator())
-            features[name] = f.batchUpdate(pairs)
+            features[name] = f.batchUpdate(pairs, params[name])
         }
         return features
     }

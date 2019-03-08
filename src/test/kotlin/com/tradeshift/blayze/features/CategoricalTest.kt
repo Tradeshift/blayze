@@ -11,13 +11,13 @@ class CategoricalTest {
                     "p" to Counter("ole"),
                     "n" to Counter("ole", "bob", "ada")
             )
-    )
+            , null)
 
     @Test
     fun return_right_log_probability() {
         val categorical = Categorical(multinomial)
-        val P_p = categorical.logPosteriorPredictive(setOf("p"), "ole")["p"]!!
-        val P_n = categorical.logPosteriorPredictive(setOf("n"), "ole")["n"]!!
+        val P_p = categorical.logPosteriorPredictive(setOf("p"), "ole", null)["p"]!!
+        val P_n = categorical.logPosteriorPredictive(setOf("n"), "ole", null)["n"]!!
 
         /*
         posterior P(ole | p) = (1 + 1) / (1 + 3) = 1 / 2
@@ -31,11 +31,11 @@ class CategoricalTest {
     @Test
     fun test_batch_update() {
         val categorical = Categorical(pseudoCount = 1.0)
-                .batchUpdate(listOf("p" to "ole", "n" to "ole"))
-                .batchUpdate(listOf("n" to "bob", "n" to "ada"))
+                .batchUpdate(listOf("p" to "ole", "n" to "ole"), null)
+                .batchUpdate(listOf("n" to "bob", "n" to "ada"), null)
 
-        val pP = categorical.logPosteriorPredictive(setOf("p"), "ole")["p"]!!
-        val pN = categorical.logPosteriorPredictive(setOf("n"), "ole")["n"]!!
+        val pP = categorical.logPosteriorPredictive(setOf("p"), "ole", null)["p"]!!
+        val pN = categorical.logPosteriorPredictive(setOf("n"), "ole", null)["n"]!!
 
         assertEquals(1 / 2.0, Math.exp(pP), 0.0000001)
         assertEquals(1 / 3.0, Math.exp(pN), 0.0000001)
