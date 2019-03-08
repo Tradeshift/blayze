@@ -455,7 +455,7 @@ class ModelTest {
         val suggestions = model.predict(Inputs(
                 mapOf(Pair("q2", "k k k k k k k k k k k k k k k k k")),
                 mapOf(Pair("user2", "notseen"))
-        ), mapOf())
+        ))
         assertEquals(setOf("p", "n"), suggestions.keys)
 
         assertEquals(0.25, suggestions["p"]!!, 0.0000001)

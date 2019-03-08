@@ -97,7 +97,7 @@ class Model(
      *
      * @return predicted outcomes and their probability, e.g. {"positive": 0.3124, "negative": 0.6876}
      */
-    fun predict(inputs: Inputs, pseudoCounts: Map<FeatureName, PseudoCount>): Map<Outcome, Double> {
+    fun predict(inputs: Inputs, pseudoCounts: Map<FeatureName, PseudoCount> = mapOf()): Map<Outcome, Double> {
         if (priorCounts.isEmpty()) {
             return mapOf()
         }
@@ -124,7 +124,7 @@ class Model(
      * @param updates List of observed updates
      * @return new updated Model
      */
-    fun batchAdd(updates: List<Update>, includeFeatureProbability: Map<FeatureName, IncludeFeatureProbability>): Model {
+    fun batchAdd(updates: List<Update>, includeFeatureProbability: Map<FeatureName, IncludeFeatureProbability> = mapOf()): Model {
         val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
 
         val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, includeFeatureProbability)
