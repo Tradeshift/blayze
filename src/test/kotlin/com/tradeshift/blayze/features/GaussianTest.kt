@@ -1,10 +1,8 @@
 package com.tradeshift.blayze.features
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.*
-import kotlin.test.assertTrue
-
 
 class GaussianTest {
 
@@ -21,9 +19,10 @@ class GaussianTest {
                         "c" to 90.0
                 )
         )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c", "d"), 20.0)
 
-        assertTrue { predictive["b"]!! > predictive["a"]!! }
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c", "d"), 20.0, null)
+
+        assertTrue(predictive["b"]!! > predictive["a"]!!)
         assertEquals(predictive["a"]!!, predictive["c"]!!, 1e-6)
         assertEquals(predictive["a"]!!, predictive["d"]!!, 1e-6)
     }
@@ -39,7 +38,7 @@ class GaussianTest {
                         "sweater" to scale * -10.0 + shift,
                         "sweater" to scale * -20.0 + shift
                 ))
-                val actual = model.logPosteriorPredictive(setOf("t-shirt", "sweater"), scale * 8.0 + shift)
+                val actual = model.logPosteriorPredictive(setOf("t-shirt", "sweater"), scale * 8.0 + shift, null)
 
                 assertEquals(expected, actual["t-shirt"]!! - actual["sweater"]!!, 1e-6)
             }
@@ -55,7 +54,7 @@ class GaussianTest {
                         "b" to 20.0
                 )
         )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0)
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0, null)
 
         assertEquals(0.0, predictive["a"]!!, 1e-6)
         assertEquals(0.0, predictive["b"]!!, 1e-6)
@@ -77,9 +76,9 @@ class GaussianTest {
                         "c" to 90.0
                 )
         )
-        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0)
+        val predictive = gauss.logPosteriorPredictive(setOf("a", "b", "c"), 20.0, null)
 
-        assertTrue { predictive["b"]!! > predictive["a"]!! }
+        assertTrue(predictive["b"]!! > predictive["a"]!!)
         assertEquals(predictive["a"]!!, predictive["c"]!!, 1e-6)
     }
 
@@ -96,7 +95,7 @@ class GaussianTest {
         val expected = 0.02782119452355812 // d = np.array([20, 30, 40]); n=d.size; scipy.stats.t.pdf(23.0, n, d.mean(), d.var()*(n+1)/n))
 
         val x = 23.0
-        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x)["p"]!!)
+        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, null)["p"]!!)
 
         assertEquals(expected, actual, 0.000001)
     }
@@ -116,7 +115,7 @@ class GaussianTest {
         for (i in (-200..200)) {
             val x = mean + i / 100.0 * std // mean +- 2stddev
             val expected = ln(1.0 / sqrt(2 * PI * variance) * exp(-(x - mean).pow(2) / (2 * variance)))
-            assertEquals(expected, gaussian.logPosteriorPredictive(setOf("p"), x)["p"]!!, 0.001)
+            assertEquals(expected, gaussian.logPosteriorPredictive(setOf("p"), x, null)["p"]!!, 0.001)
         }
     }
 
