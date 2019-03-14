@@ -4,10 +4,7 @@ import com.tradeshift.blayze.dto.FeatureName
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.dto.Update
-import com.tradeshift.blayze.features.Categorical
-import com.tradeshift.blayze.features.Feature
-import com.tradeshift.blayze.features.Gaussian
-import com.tradeshift.blayze.features.Text
+import com.tradeshift.blayze.features.*
 
 /**
  * A flexible and robust Bayesian Naive Bayes classifier that supports multiple features of multiple types, and online learning.
@@ -56,6 +53,12 @@ class Model(
         private val pseudoCount: Int = 0
 ) {
 
+    data class Parameters(
+            val text: Map<FeatureName, Multinomial.Parameters> = mapOf(),
+            val categorial: Map<FeatureName, Multinomial.Parameters> = mapOf(),
+            val gaussian: Map<FeatureName, Gaussian.Parameters> = mapOf()
+    )
+
     // Categorical distribution with dirichlet prior, see https://en.wikipedia.org/wiki/Conjugate_prior#Discrete_distributions
     private val logPrior: Map<String, Double> by lazy {
         priorCounts.mapValues { Math.log(pseudoCount + it.value.toDouble()) } // We don't need to subtract the log(total count), since that is constant w.r.t outcomes, so is normalized away later.
@@ -95,16 +98,16 @@ class Model(
      *
      * @return predicted outcomes and their probability, e.g. {"positive": 0.3124, "negative": 0.6876}
      */
-    fun predict(inputs: Inputs): Map<Outcome, Double> {
+    fun predict(inputs: Inputs, parameters: Parameters = Parameters()): Map<Outcome, Double> {
         if (priorCounts.isEmpty()) {
             return mapOf()
         }
 
         val maps = mutableListOf<Map<Outcome, Double>>()
         maps.add(logPrior)
-        maps.addAll(logProbabilities(textFeatures, inputs.text))
-        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical))
-        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian))
+        maps.addAll(logProbabilities(textFeatures, inputs.text, parameters.text))
+        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, parameters.categorial))
+        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, parameters.gaussian))
 
         return normalize(sumMaps(maps))
     }
@@ -122,22 +125,22 @@ class Model(
      * @param updates List of observed updates
      * @return new updated Model
      */
-    fun batchAdd(updates: List<Update>): Model {
+    fun batchAdd(updates: List<Update>, parameters: Parameters = Parameters()): Model {
         val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
 
-        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical })
-        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text })
-        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian })
+        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, parameters.categorial)
+        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, parameters.text)
+        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, parameters.gaussian)
 
         return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures)
     }
 
-    private fun <F, V> logProbabilities(features: Map<FeatureName, Feature<F, V>>, values: Map<FeatureName, V>): List<Map<Outcome, Double>> {
+    private fun <F, V, P> logProbabilities(features: Map<FeatureName, Feature<F, V, P>>, values: Map<FeatureName, V>, parameters: Map<FeatureName, P>): List<Map<Outcome, Double>> {
         val maps = mutableListOf<Map<Outcome, Double>>()
         for ((featureName, featureValue) in values) {
             val feature = features[featureName]
             if (feature != null) {
-                val logPosteriorPredictive = feature.logPosteriorPredictive(logPrior.keys, featureValue)
+                val logPosteriorPredictive = feature.logPosteriorPredictive(logPrior.keys, featureValue, parameters[featureName])
                 assert(logPosteriorPredictive.keys == logPrior.keys) {
                     "$featureName outcomes did not match logPrior outcomes. Expected ${logPrior.keys}, Actual: ${logPosteriorPredictive.keys}"
                 }
@@ -166,11 +169,13 @@ class Model(
     }
 
 
-    private fun <V, F : Feature<F, V>> updateFeatures(
+    private fun <V, P, F : Feature<F, V, P>> updateFeatures(
             old: Map<FeatureName, F>,
             creator: () -> F,
             updates: List<Update>,
-            extractor: (Inputs) -> Map<FeatureName, V>): Map<FeatureName, F> {
+            extractor: (Inputs) -> Map<FeatureName, V>,
+            parameters: Map<FeatureName, P>
+    ): Map<FeatureName, F> {
 
         val outcomes = updates.map { it.outcome }
         val values = updates.map { extractor(it.inputs) }
@@ -179,7 +184,7 @@ class Model(
         val features = old.toMutableMap()
         for ((name, pairs) in data) {
             val f = features.getOrDefault(name, creator())
-            features[name] = f.batchUpdate(pairs)
+            features[name] = f.batchUpdate(pairs, parameters[name])
         }
         return features
     }

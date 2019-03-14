@@ -8,11 +8,13 @@ import com.tradeshift.blayze.dto.Outcome
 /**
  * A feature for categorical data, i.e. 1 of K data, e.g. user-ids, countries, etc.
  */
-class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue> {
+class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue, Multinomial.Parameters> {
 
-    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
-            this(Multinomial(includeFeatureProbability, pseudoCount))
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) : this(Multinomial(includeFeatureProbability, pseudoCount))
 
+    override fun withParameters(parameters: Multinomial.Parameters): Categorical {
+        return Categorical(delegate.withParameters(parameters))
+    }
 
     fun toProto(): Protos.Categorical {
         return Protos.Categorical.newBuilder().setDelegate(delegate.toProto()).build()
@@ -24,13 +26,13 @@ class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<C
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>): Categorical {
+    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, parameters: Multinomial.Parameters?): Categorical {
         val categories = updates.map { Pair(it.first, Counter(it.second)) }
-        return Categorical(delegate.batchUpdate(categories))
+        return Categorical(delegate.batchUpdate(categories, parameters))
     }
 
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, parameters: Multinomial.Parameters?): Map<Outcome, Double> {
         val counts = Counter(value)
-        return delegate.logPosteriorPredictive(outcomes, counts)
+        return delegate.logPosteriorPredictive(outcomes, counts, parameters)
     }
 }

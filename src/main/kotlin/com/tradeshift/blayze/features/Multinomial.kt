@@ -9,20 +9,25 @@ import java.lang.Math.log
 import kotlin.math.pow
 
 class Multinomial private constructor(
-        private val includeFeatureProbability: Double = 1.0,
-        private val pseudoCount: Double = 0.1,
+        private val defaultParams: Multinomial.Parameters,
         private val outcomeToIdx: Map<Outcome, Int>,
         private val features: Map<String, SparseIntVector>
-) : Feature<Multinomial, Counter<String>> {
+) : Feature<Multinomial, Counter<String>, Multinomial.Parameters> {
+
+    /**
+     * @param includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
+     * @param pseudoCount Effectively adds this number to all counts, even zero counts.
+     */
+    data class Parameters(
+            val includeFeatureProbability: Double = 1.0,
+            val pseudoCount: Double = 0.1
+    )
 
     /**
      * A feature for multinomial data.
-     *
-     * @property includeFeatureProbability Include new features with this probability. See Ad Click Prediction: a View from the Trenches, Table 2
-     * @property pseudoCount Effectively adds this number to all counts, even zero counts.
      */
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
-            this(includeFeatureProbability, pseudoCount, HashMap(), HashMap())
+            this(Multinomial.Parameters(includeFeatureProbability, pseudoCount), HashMap(), HashMap())
 
     /**
      * The number of features seen for each outcome
@@ -41,19 +46,25 @@ class Multinomial private constructor(
         outcomeToIdx.map { it.value to it.key }.toMap()
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>): Multinomial {
+    override fun withParameters(parameters: Parameters): Multinomial {
+        return Multinomial(parameters, outcomeToIdx, features)
+    }
+
+
+    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>, parameters: Parameters?): Multinomial {
         val featuresCopy = features.toMutableMap()
         val outcomesCopy = outcomeToIdx.toMutableMap()
 
         fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key) { outcomesCopy.size }
 
-        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence()))
+        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence(), (parameters ?: defaultParams).includeFeatureProbability))
         for ((feature, counter) in formattedUpdates) {
             val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
             val vec = SparseIntVector.fromMap(indexToUpdate)
             featuresCopy[feature] = featuresCopy[feature]?.add(vec) ?: vec
         }
-        return Multinomial(includeFeatureProbability, pseudoCount, outcomesCopy, featuresCopy)
+
+        return Multinomial(defaultParams, outcomesCopy, featuresCopy)
     }
 
 
@@ -65,7 +76,8 @@ class Multinomial private constructor(
      The current implementation uses this to achieve O(W+N+AW). It does this by first computing the posterior predictive assuming
      every outcome has observed every word 0 times in O(W+N). Then it corrects the mistakes it made in O(AW).
      */
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: Counter<String>, parameters: Parameters?): Map<Outcome, Double> {
+        val p = parameters ?: defaultParams
         val filtered = value.filter { features[it.key] != null } //hack, ensures unseen words does not influence posterior of outcomes
 
         val n = filtered.values.sum()
@@ -74,7 +86,7 @@ class Multinomial private constructor(
         }
 
         val result = mutableMapOf<String, Double>()
-        val logBetaZeroCounts = filtered.mapValues { log(it.value.toDouble()) + logBeta(0 + pseudoCount, it.value.toDouble()) } //O(W)
+        val logBetaZeroCounts = filtered.mapValues { log(it.value.toDouble()) + logBeta(0 + p.pseudoCount, it.value.toDouble()) } //O(W)
         val logBetaZeroCountsSum = logBetaZeroCounts.map { it.value }.sum()
         for (outcome in outcomes) { //O(N)
             val outcomeIdx = outcomeToIdx[outcome]
@@ -83,7 +95,7 @@ class Multinomial private constructor(
             } else {
                 0
             }
-            val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * pseudoCount, n.toDouble())
+            val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * p.pseudoCount, n.toDouble())
             result[outcome] = numerator - logBetaZeroCountsSum //assuming every outcome has seen every word 0 times
         }
 
@@ -95,7 +107,7 @@ class Multinomial private constructor(
                     val outcome = idxToOutcome[outcomeIdx]!!
                     val prev = result[outcome]
                     if (prev != null) { //outcomes may be a subset of all the outcomes we've observed
-                        val correct = log(count.toDouble()) + logBeta(i + pseudoCount, count.toDouble())
+                        val correct = log(count.toDouble()) + logBeta(i + p.pseudoCount, count.toDouble())
                         result[outcome] = prev - (-wrong + correct) //subtract error, add correct value
                     }
                 }
@@ -105,7 +117,7 @@ class Multinomial private constructor(
         return result
     }
 
-    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>): Sequence<Pair<Outcome, Counter<String>>> {
+    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>, includeFeatureProbability: Double): Sequence<Pair<Outcome, Counter<String>>> {
         fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
         val knownFeatures = features.keys.toMutableSet()
         return updates.map { (outcome, counter) ->
@@ -127,16 +139,15 @@ class Multinomial private constructor(
     }
 
     fun toProto(): Protos.Multinomial = Protos.Multinomial.newBuilder()
-            .setIncludeFeatureProbability(includeFeatureProbability)
-            .setPseudoCount(pseudoCount)
+            .setIncludeFeatureProbability(defaultParams.includeFeatureProbability)
+            .setPseudoCount(defaultParams.pseudoCount)
             .putAllOutcomes(outcomeToIdx)
             .putAllFeatures(features.mapValues { it.value.toProto() })
             .build()
 
     companion object {
         fun fromProto(proto: Protos.Multinomial) = Multinomial(
-                proto.includeFeatureProbability,
-                proto.pseudoCount,
+                Parameters(proto.includeFeatureProbability, proto.pseudoCount),
                 proto.outcomesMap,
                 proto.featuresMap.mapValues { SparseIntVector.fromProto(it.value) })
     }
