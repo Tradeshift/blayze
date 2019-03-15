@@ -5,7 +5,7 @@ import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.collection.SparseIntVector
 import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.logBeta
-import java.lang.Math.log
+import kotlin.math.ln
 import kotlin.math.pow
 
 class Multinomial private constructor(
@@ -86,7 +86,7 @@ class Multinomial private constructor(
         }
 
         val result = mutableMapOf<String, Double>()
-        val logBetaZeroCounts = filtered.mapValues { log(it.value.toDouble()) + logBeta(0 + p.pseudoCount, it.value.toDouble()) } //O(W)
+        val logBetaZeroCounts = filtered.mapValues { ln(it.value.toDouble()) + logBeta(0 + p.pseudoCount, it.value.toDouble()) } //O(W)
         val logBetaZeroCountsSum = logBetaZeroCounts.map { it.value }.sum()
         for (outcome in outcomes) { //O(N)
             val outcomeIdx = outcomeToIdx[outcome]
@@ -95,7 +95,7 @@ class Multinomial private constructor(
             } else {
                 0
             }
-            val numerator = log(n.toDouble()) + logBeta(alpha_0 + features.size * p.pseudoCount, n.toDouble())
+            val numerator = ln(n.toDouble()) + logBeta(alpha_0 + features.size * p.pseudoCount, n.toDouble())
             result[outcome] = numerator - logBetaZeroCountsSum //assuming every outcome has seen every word 0 times
         }
 
@@ -107,7 +107,7 @@ class Multinomial private constructor(
                     val outcome = idxToOutcome[outcomeIdx]!!
                     val prev = result[outcome]
                     if (prev != null) { //outcomes may be a subset of all the outcomes we've observed
-                        val correct = log(count.toDouble()) + logBeta(i + p.pseudoCount, count.toDouble())
+                        val correct = ln(count.toDouble()) + logBeta(i + p.pseudoCount, count.toDouble())
                         result[outcome] = prev - (-wrong + correct) //subtract error, add correct value
                     }
                 }

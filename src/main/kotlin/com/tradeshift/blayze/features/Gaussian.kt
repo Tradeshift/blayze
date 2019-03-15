@@ -34,6 +34,8 @@ class Gaussian private constructor(
      *
      * See https://en.wikipedia.org/wiki/Conjugate_prior#Continuous_distributions and the docs of [Gaussian]
      *
+     * These parameters are only used in [logPosteriorPredictive], not [batchUpdate].
+     *
      * Unless you really know what you're doing, you probably shouldn't change these from the default values.
      */
     data class Parameters(
@@ -56,6 +58,11 @@ class Gaussian private constructor(
         return Gaussian(parameters, estimators)
     }
 
+    /**
+     * See [Feature.batchUpdate]
+     *
+     * Parameters are not used.
+     */
     override fun batchUpdate(updates: List<Pair<Outcome, Double>>, parameters: Parameters?): Gaussian {
         val map = estimators.toMutableMap()
         for ((outcome, x) in updates) {
@@ -93,7 +100,8 @@ class Gaussian private constructor(
         val pmu = (p.nu * p.mu0 + n * mu) / (p.nu + n)
         val pnu = (p.nu + n)
         val palpha = (p.alpha + n / 2.0)
-        val pbeta = (p.beta + (1.0 / 2.0) * (sigma.pow(2.0) * (n - 1)) + n * p.nu / (n + p.nu) * (mu - p.mu0).pow(2.0) / 2.0)
+        val ss = sigma.pow(2.0) * (n - 1) // n-1 here, since the way std is calculated
+        val pbeta = (p.beta + (1.0 / 2.0) * ss + n * p.nu / (n + p.nu) * (mu - p.mu0).pow(2.0) / 2.0)
 
         return logStudentT(value, 2 * palpha, pmu, sqrt(pbeta * (pnu + 1) / (palpha * pnu)))
     }
