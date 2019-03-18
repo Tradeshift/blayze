@@ -41,4 +41,14 @@ class CategoricalTest {
         assertEquals(1 / 3.0, Math.exp(pN), 0.0000001)
     }
 
+    @Test
+    fun test_withParameters_sets_parameters() {
+        val parameters = Multinomial.Parameters(0.0892275415, 0.7363151583)
+        val categorical = Categorical().withParameters(parameters)
+
+        assertEquals(categorical.delegate.defaultParams, parameters)
+    }
+
+    @Test test_
+
 }

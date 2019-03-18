@@ -2,6 +2,7 @@ import com.tradeshift.blayze.Model
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.dto.Inputs
+import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Categorical
 import com.tradeshift.blayze.features.Gaussian
@@ -9,6 +10,7 @@ import com.tradeshift.blayze.features.Multinomial
 import com.tradeshift.blayze.features.Text
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.mockk.verify
 import org.junit.Assert.*
 import org.junit.Test
@@ -453,7 +455,7 @@ class ModelTest {
         assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
 
     }
-    
+
     @Test
     fun withParameters_set_default_parameter_for_existing_features() {
         val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
@@ -476,6 +478,19 @@ class ModelTest {
         assertTrue( model.gaussianFeatures.containsKey("gFoo") )
         assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
 
+    }
+
+    @Test
+    fun parameters_are_passed_from_add_to_batchadd() {
+        val spyModel = spyk(Model())
+
+        val update = Update(Inputs(text = mapOf("tFoo" to "yes yes")), "outFoo")
+        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
+        val parameter = (Model.Parameters(text = mapOf("tFoo" to parametersText)))
+
+        spyModel.add(update , parameter)
+
+        verify { spyModel.batchAdd(listOf(update), parameter) }
     }
 
     @Test
