@@ -11,7 +11,7 @@ import com.tradeshift.blayze.dto.Outcome
  *
  * The pre-processing replaces all non-letters and non-numbers with spaces, lowercases, splits on spaces and finally removes english stopwords.
  */
-class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue, Multinomial.Parameters> {
+class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue, Multinomial.Parameters> {
 
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) : this(Multinomial(includeFeatureProbability, pseudoCount))
 

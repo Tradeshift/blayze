@@ -9,7 +9,7 @@ import kotlin.math.ln
 import kotlin.math.pow
 
 class Multinomial private constructor(
-        private val defaultParams: Multinomial.Parameters,
+        val defaultParams: Multinomial.Parameters,
         private val outcomeToIdx: Map<Outcome, Int>,
         private val features: Map<String, SparseIntVector>
 ) : Feature<Multinomial, Counter<String>, Multinomial.Parameters> {

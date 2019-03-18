@@ -32,4 +32,5 @@ interface Feature<F, V, P> {
      * Subsequent calls to [logPosteriorPredictive] and [batchUpdate] on this new feature without explicit parameters, will use these default parameters.
      */
     fun withParameters(parameters: P): F
+
 }

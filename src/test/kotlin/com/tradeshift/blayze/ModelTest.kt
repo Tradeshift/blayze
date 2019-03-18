@@ -431,13 +431,51 @@ class ModelTest {
     }
 
     @Test
-    fun withParameters_blows_up_if_parameters_are_given_for_feature_that_does_not_exist() {
-        try {
-            Model().withParameters(Model.Parameters(text = mapOf("foo" to Multinomial.Parameters())))
-            fail("Expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertEquals("No feature named 'foo'", e.message)
-        }
+    fun withParameters_adds_feature_with_parameters_if_feature_does_not_exist() {
+        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters( 0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters( 0.8392657028, 22, 0.83926570281, 221)
+
+        val model = Model()
+                .withParameters(Model.Parameters(
+                        text = mapOf("tFoo" to parametersText),
+                        categorical = mapOf("cFoo" to parametersCategorical),
+                        gaussian = mapOf("gFoo" to parametersGaussian)))
+
+
+        assertTrue( model.textFeatures.containsKey("tFoo") )
+        assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
+
+        assertTrue( model.categoricalFeatures.containsKey("cFoo") )
+        assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
+
+        assertTrue( model.gaussianFeatures.containsKey("gFoo") )
+        assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
+
+    }
+    
+    @Test
+    fun withParameters_set_default_parameter_for_existing_features() {
+        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters( 0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters( 0.8392657028, 22, 0.83926570281, 221)
+
+        val model = Model(textFeatures = mapOf( "tFoo" to Text()), categoricalFeatures = mapOf("cFoo" to Categorical()), gaussianFeatures = mapOf("gFoo" to Gaussian()))
+                .withParameters(Model.Parameters(
+                        text = mapOf("tFoo" to parametersText),
+                        categorical = mapOf("cFoo" to parametersCategorical),
+                        gaussian = mapOf("gFoo" to parametersGaussian)))
+
+
+        assertTrue( model.textFeatures.containsKey("tFoo") )
+        assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
+
+        assertTrue( model.categoricalFeatures.containsKey("cFoo") )
+        assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
+
+        assertTrue( model.gaussianFeatures.containsKey("gFoo") )
+        assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
+
     }
 
     @Test

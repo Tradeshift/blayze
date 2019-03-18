@@ -22,7 +22,7 @@ import kotlin.math.*
  *  - Adding new gaussian features doesn't break the classifier (same as above)
  */
 class Gaussian private constructor(
-        private val defaultParameters: Gaussian.Parameters,
+        val defaultParameters: Gaussian.Parameters,
         private val estimators: Map<Outcome, StreamingEstimator>
 ) : Feature<Gaussian, Double, Gaussian.Parameters> {
 

@@ -8,7 +8,7 @@ import com.tradeshift.blayze.dto.Outcome
 /**
  * A feature for categorical data, i.e. 1 of K data, e.g. user-ids, countries, etc.
  */
-class Categorical(private val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue, Multinomial.Parameters> {
+class Categorical(val delegate: Multinomial = Multinomial()) : Feature<Categorical, FeatureValue, Multinomial.Parameters> {
 
     constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) : this(Multinomial(includeFeatureProbability, pseudoCount))
 

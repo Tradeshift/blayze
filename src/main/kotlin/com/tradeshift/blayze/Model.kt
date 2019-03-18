@@ -47,11 +47,11 @@ import kotlin.math.ln
  * @param priorPseudoCount      Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
  */
 class Model(
-        private val priorCounts: Map<Outcome, Int> = mapOf(),
-        private val textFeatures: Map<FeatureName, Text> = mapOf(),
-        private val categoricalFeatures: Map<FeatureName, Categorical> = mapOf(),
-        private val gaussianFeatures: Map<FeatureName, Gaussian> = mapOf(),
-        private val priorPseudoCount: Int = 0
+        val priorCounts: Map<Outcome, Int> = mapOf(),
+        val textFeatures: Map<FeatureName, Text> = mapOf(),
+        val categoricalFeatures: Map<FeatureName, Categorical> = mapOf(),
+        val gaussianFeatures: Map<FeatureName, Gaussian> = mapOf(),
+        val priorPseudoCount: Int = 0
 ) {
 
     /**
@@ -78,16 +78,16 @@ class Model(
      * Return a new model with updated default [Parameters].
      */
     fun withParameters(parameters: Parameters): Model {
-        val text = withParameters(textFeatures, parameters.text)
-        val categorial = withParameters(categoricalFeatures, parameters.categorical)
-        val gaussian = withParameters(gaussianFeatures, parameters.gaussian)
-        return Model(priorCounts, text, categorial, gaussian, parameters.priorPseudoCount)
+        val text = withParameters(textFeatures, parameters.text, { Text() })
+        val categorical = withParameters(categoricalFeatures, parameters.categorical, { Categorical() })
+        val gaussian = withParameters(gaussianFeatures, parameters.gaussian, { Gaussian() })
+        return Model(priorCounts, text, categorical, gaussian, parameters.priorPseudoCount)
     }
 
-    private fun <V, P, F : Feature<F, V, P>> withParameters(features: Map<FeatureName, F>, parameters: Map<FeatureName, P>): Map<FeatureName, F> {
+    private fun <V, P, F : Feature<F, V, P>> withParameters(features: Map<FeatureName, F>, parameters: Map<FeatureName, P>, creator: () -> F ): Map<FeatureName, F> {
         var cf = features
         for ((n, p) in parameters) {
-            val f = cf[n] ?: throw java.lang.IllegalArgumentException("No feature named '$n'")
+            val f = cf[n] ?: creator()
             cf = cf.plus(n to f.withParameters(p))
         }
         return cf
