@@ -88,15 +88,20 @@ class MultinomialTest {
     }
 
     @Test
-    fun test_default_parameters_is_used_when_no_parameters_passed_batchAdd() {
+    fun test_parameters_are_used_when_passed_or_default_when_not_passed_batchAdd() {
 
         val parameters = Multinomial.Parameters(0.0, 0.73)
         val multinomial = Multinomial(1.0, 1.0)
+                .batchUpdate(listOf(
+                        "p" to Counter("a", "b"),
+                        "n" to Counter("b", "c")
+                ), parameters)
+                // Set default parameters
                 .withParameters(parameters)
                 .batchUpdate(listOf(
-                    "p" to Counter("a", "b"),
-                    "n" to Counter("b", "c")
-        ))
+                        "p" to Counter("a", "b"),
+                        "n" to Counter("b", "c")
+                ))
 
         val logProb1 = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
         val logProb2 = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("b", "c"))
@@ -105,7 +110,7 @@ class MultinomialTest {
     }
 
     @Test
-    fun test_default_parameters_is_used_when_no_parameters_passed_logPosteriorPredictive() {
+    fun test_parameters_are_used_when_passed_or_default_when_not_passed_logPosteriorPredictive() {
         /*
          import numpy as np
          from tensorflow.distributions import DirichletMultinomial
@@ -131,10 +136,12 @@ class MultinomialTest {
                 "p" to Counter("a", "b"),
                 "n" to Counter("b", "c")
         ))
-                .withParameters(parameters)
 
-        val logProb = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
+        val logProb = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"), parameters)
+        // Set default parameters
+        val logProbDefaultParams = multinomial.withParameters(parameters).logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
 
+        assertEquals(logProb, logProbDefaultParams)
         assertEquals(-1.2900444, logProb["p"]!!, 1e-6)
         assertEquals(-2.1528764, logProb["n"]!!, 1e-6)
         assertEquals(-1.8801968, logProb["x"]!!, 1e-6)
