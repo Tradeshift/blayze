@@ -6,7 +6,7 @@
 
     <groupId>com.tradeshift</groupId>
     <artifactId>blayze</artifactId>
-    <version>4.1.1</version>
+    <version>4.1.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -287,6 +287,11 @@
                                 </goals>
                                 <configuration>
                                     <keyname>EA03A536</keyname>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                        <arg>--batch</arg>
+                                    </gpgArguments>
                                 </configuration>
                             </execution>
                         </executions>
