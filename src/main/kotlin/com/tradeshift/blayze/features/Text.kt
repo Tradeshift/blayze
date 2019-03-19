@@ -11,11 +11,13 @@ import com.tradeshift.blayze.dto.Outcome
  *
  * The pre-processing replaces all non-letters and non-numbers with spaces, lowercases, splits on spaces and finally removes english stopwords.
  */
-class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue> {
+class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue, Multinomial.Parameters> {
 
-    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) :
-            this(Multinomial(includeFeatureProbability, pseudoCount))
+    constructor(includeFeatureProbability: Double = 1.0, pseudoCount: Double = 0.1) : this(Multinomial(includeFeatureProbability, pseudoCount))
 
+    override fun withParameters(parameters: Multinomial.Parameters): Text {
+        return Text(delegate.withParameters(parameters))
+    }
 
     fun toProto(): Protos.Text {
         return Protos.Text.newBuilder().setDelegate(delegate.toProto()).build()
@@ -27,14 +29,14 @@ class Text(private val delegate: Multinomial = Multinomial()) : Feature<Text, Fe
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>): Text {
+    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, parameters: Multinomial.Parameters?): Text {
         val words = updates.map { Pair(it.first, WordCounter.countWords(it.second)) }
-        return Text(delegate.batchUpdate(words))
+        return Text(delegate.batchUpdate(words, parameters))
     }
 
-    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue): Map<Outcome, Double> {
+    override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, parameters: Multinomial.Parameters?): Map<Outcome, Double> {
         val inputWordCounts = WordCounter.countWords(value)
-        return delegate.logPosteriorPredictive(outcomes, inputWordCounts)
+        return delegate.logPosteriorPredictive(outcomes, inputWordCounts, parameters)
     }
 
     object WordCounter {

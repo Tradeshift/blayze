@@ -13,6 +13,10 @@ message Model {
 }
 
 message Gaussian {
+    double mu0 = 2;
+    int32 nu = 3;
+    double beta = 4;
+    int32 alpha = 5;
     map<string, StreamingEstimator> estimators = 1;
 }
 

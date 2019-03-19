@@ -4,12 +4,16 @@ import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Categorical
+import com.tradeshift.blayze.features.Gaussian
 import com.tradeshift.blayze.features.Multinomial
 import com.tradeshift.blayze.features.Text
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.spyk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.streams.toList
 
 
 class ModelTest {
@@ -76,6 +80,19 @@ class ModelTest {
         assertEquals(0.666666666, suggestions["n"]!!, 0.0000001)
     }
 
+    /**
+     * This fails when you make backwards incompatible changes to the protobuf format.
+     * If that is intended then bump the [Model.serializationVersion] and update this test.
+     * Serialized model and expected values from revision cdd3cd6
+     */
+    @Test
+    fun can_deserialize_current_version_protobuf_model() {
+        val model = Model.fromProto(Protos.Model.parseFrom(this::class.java.getResource("/model-v3.pb").readBytes()))
+        val output = model.predict(Inputs(mapOf("text1" to "foo bar bar", "text2" to "baz baz"), mapOf("c1" to "no", "c2" to "no"), mapOf("g1" to 1.3, "g2" to 2.4)))
+
+        assertEquals(mapOf("out1" to 0.46795978470600214, "out2" to 0.5320402152939978), output)
+    }
+
     @Test
     fun text_features_can_be_serialized_and_deserialized() {
         val inputs = Inputs(text = mapOf(Pair("q", "awesome awesome awesome ok")))
@@ -136,9 +153,11 @@ class ModelTest {
                                 "sweater")
                 )
         )
+
         val predictions = model.predict(Inputs(
                 gaussian = mapOf(Pair("weather.degree", 14.0))
         ))
+
         val actual = predictions["t-shirt"]!!
         assertEquals(0.8, actual, 1e-6)
     }
@@ -207,28 +226,6 @@ class ModelTest {
         assertEquals(0.5, delegate.includeFeatureProbability, 0.0)
     }
 
-    @Test
-    fun can_fit_20newsgroup() {
-        val train = newsgroup("20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.1)))).batchAdd(train)
-
-
-        val test = newsgroup("20newsgroup_test.txt")
-        val acc = test
-                .parallelStream()
-                .map {
-                    if (it.outcome == model.predict(it.inputs).maxBy { it.value }?.key) {
-                        1.0
-                    } else {
-                        0.0
-                    }
-                }
-                .toList()
-                .average()
-
-        assertTrue("expected $acc > 0.65", acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
-    }
-
 
     @Test
     fun can_batch_add_gaussian_features() {
@@ -258,14 +255,6 @@ class ModelTest {
 
         assertEquals(pUSD, predictions["usd"]!!, 0.000001)
         assertEquals(pEUR, predictions["eur"]!!, 0.000001)
-    }
-
-    @Test
-    fun can_fit_iris_dataset() {
-        val iris = iris()
-        val model = Model().batchAdd(iris)
-        val correct = iris.map { if (model.predict(it.inputs).maxBy { it.value }!!.key == it.outcome) 1 else 0 }.sum()
-        assertEquals(143, correct) // sklearn.naive_bayes.GaussianNB gets 144/150 correct.
     }
 
     @Test
@@ -455,40 +444,159 @@ class ModelTest {
         assertEquals(0.75, suggestions["n"]!!, 0.0000001)
     }
 
+    @Test
+    fun withParameters_adds_feature_with_parameters_if_feature_does_not_exist() {
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters(0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters(0.8392657028, 22, 0.83926570281, 221)
 
-    fun newsgroup(fname: String): List<Update> {
-        val lines = this::class.java.getResource(fname).readText(Charsets.UTF_8).split("\n")
-        val updates = mutableListOf<Update>()
+        val model = Model()
+                .withParameters(Model.Parameters(
+                        text = mapOf("tFoo" to parametersText),
+                        categorical = mapOf("cFoo" to parametersCategorical),
+                        gaussian = mapOf("gFoo" to parametersGaussian)))
 
-        for (line in lines) {
-            val split = line.split(" ".toRegex(), 2).toTypedArray()
-            val outcome = split[0]
-            var f = Inputs()
-            if (split.size == 2) { //some are legit empty
-                f = Inputs(mapOf("q" to split[1]))
-            }
-            updates.add(Update(f, outcome))
-        }
-        return updates
+
+        assertTrue(model.textFeatures.containsKey("tFoo"))
+        assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
+
+        assertTrue(model.categoricalFeatures.containsKey("cFoo"))
+        assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
+
+        assertTrue(model.gaussianFeatures.containsKey("gFoo"))
+        assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
+
     }
 
-    fun iris(): List<Update> {
-        val lines = this::class.java.getResource("iris.csv").readText(Charsets.UTF_8).split("\n")
-        val updates = mutableListOf<Update>()
-        for (s in lines.drop(1)) {
-            val split = s.split(",")
-            updates.add(Update(Inputs(
-                    gaussian = mapOf(
-                            "sepal_length" to split[0].toDouble(),
-                            "sepal_width" to split[1].toDouble(),
-                            "petal_length" to split[2].toDouble(),
-                            "petal_width" to split[3].toDouble()
+    @Test
+    fun withParameters_set_default_parameter_for_existing_features() {
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters(0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters(0.8392657028, 22, 0.83926570281, 221)
 
-                    )),
-                    split.last())
-            )
-        }
-        return updates
+        val model = Model(textFeatures = mapOf("tFoo" to Text()), categoricalFeatures = mapOf("cFoo" to Categorical()), gaussianFeatures = mapOf("gFoo" to Gaussian()))
+                .withParameters(Model.Parameters(
+                        text = mapOf("tFoo" to parametersText),
+                        categorical = mapOf("cFoo" to parametersCategorical),
+                        gaussian = mapOf("gFoo" to parametersGaussian)))
+
+
+        assertTrue(model.textFeatures.containsKey("tFoo"))
+        assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
+
+        assertTrue(model.categoricalFeatures.containsKey("cFoo"))
+        assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
+
+        assertTrue(model.gaussianFeatures.containsKey("gFoo"))
+        assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
+
+    }
+
+    @Test
+    fun parameters_are_passed_from_add_to_batchadd() {
+        val spyModel = spyk(Model())
+
+        val update = Update(Inputs(text = mapOf("tFoo" to "yes yes")), "outFoo")
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
+        val parameter = (Model.Parameters(text = mapOf("tFoo" to parametersText)))
+
+        spyModel.add(update, parameter)
+
+        verify { spyModel.batchAdd(listOf(update), parameter) }
+    }
+
+    @Test
+    fun predict_with_null_parameters_call_features_with_null_parameters() {
+        val text = mockk<Text>()
+        every { text.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val categorical = mockk<Categorical>()
+        every { categorical.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val gaussian = mockk<Gaussian>()
+        every { gaussian.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val m = Model(mapOf("o1" to 1, "o2" to 1), mapOf("foo" to text), mapOf("bar" to categorical), mapOf("baz" to gaussian), 0)
+        m.predict(Inputs(mapOf("foo" to "yes yes"), mapOf("bar" to "nope"), mapOf("baz" to 1.0)))
+
+        verify { text.logPosteriorPredictive(setOf("o1", "o2"), "yes yes", null) }
+        verify { categorical.logPosteriorPredictive(setOf("o1", "o2"), "nope", null) }
+        verify { gaussian.logPosteriorPredictive(setOf("o1", "o2"), 1.0, null) }
+    }
+
+    @Test
+    fun predict_with_non_null_parameters_call_features_with_given_parameters() {
+        val text1 = mockk<Text>()
+        every { text1.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val text2 = mockk<Text>()
+        every { text2.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val categorical = mockk<Categorical>()
+        every { categorical.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val gaussian = mockk<Gaussian>()
+        every { gaussian.logPosteriorPredictive(any(), any(), any()) } returns mapOf("o1" to -1.0, "o2" to -2.0)
+
+        val m = Model(mapOf("o1" to 1, "o2" to 1), mapOf("foo1" to text1, "foo2" to text2), mapOf("bar" to categorical), mapOf("baz" to gaussian), 0)
+        m.predict(Inputs(mapOf("foo1" to "yes yes", "foo2" to "no no"), mapOf("bar" to "nope"), mapOf("baz" to 1.0)), Model.Parameters(
+                0,
+                mapOf("foo1" to Multinomial.Parameters(0.51, 0.52)),
+                mapOf("bar" to Multinomial.Parameters(0.31, 0.32)),
+                mapOf("baz" to Gaussian.Parameters(1.0, 1, 2.0, 2))
+        ))
+
+        verify { text1.logPosteriorPredictive(setOf("o1", "o2"), "yes yes", Multinomial.Parameters(0.51, 0.52)) }
+        verify { text2.logPosteriorPredictive(setOf("o1", "o2"), "no no", null) }
+        verify { categorical.logPosteriorPredictive(setOf("o1", "o2"), "nope", Multinomial.Parameters(0.31, 0.32)) }
+        verify { gaussian.logPosteriorPredictive(setOf("o1", "o2"), 1.0, Gaussian.Parameters(1.0, 1, 2.0, 2)) }
+    }
+
+    @Test
+    fun batchAdd_with_null_parameters_call_features_with_null_parameters() {
+        val text = mockk<Text>()
+        every { text.batchUpdate(any(), any()) } returns text
+
+        val categorical = mockk<Categorical>()
+        every { categorical.batchUpdate(any(), any()) } returns categorical
+
+        val gaussian = mockk<Gaussian>()
+        every { gaussian.batchUpdate(any(), any()) } returns gaussian
+
+        val m = Model(mapOf("o1" to 1, "o2" to 1), mapOf("foo" to text), mapOf("bar" to categorical), mapOf("baz" to gaussian), 0)
+        m.batchAdd(listOf(Update(Inputs(mapOf("foo" to "yes yes"), mapOf("bar" to "nope"), mapOf("baz" to 1.0)), "o1")))
+
+        verify { text.batchUpdate(listOf("o1" to "yes yes"), null) }
+        verify { categorical.batchUpdate(listOf("o1" to "nope"), null) }
+        verify { gaussian.batchUpdate(listOf("o1" to 1.0), null) }
+    }
+
+    @Test
+    fun batchAdd_with_non_null_parameters_call_features_with_given_parameters() {
+        val text1 = mockk<Text>()
+        every { text1.batchUpdate(any(), any()) } returns text1
+
+        val text2 = mockk<Text>()
+        every { text2.batchUpdate(any(), any()) } returns text2
+
+        val categorical = mockk<Categorical>()
+        every { categorical.batchUpdate(any(), any()) } returns categorical
+
+        val gaussian = mockk<Gaussian>()
+        every { gaussian.batchUpdate(any(), any()) } returns gaussian
+
+        val m = Model(mapOf("o1" to 1, "o2" to 1), mapOf("foo1" to text1, "foo2" to text2), mapOf("bar" to categorical), mapOf("baz" to gaussian), 0)
+        m.batchAdd(listOf(Update(Inputs(mapOf("foo1" to "yes yes", "foo2" to "yes no"), mapOf("bar" to "nope"), mapOf("baz" to 1.0)), "o1")), Model.Parameters(
+                0,
+                mapOf("foo1" to Multinomial.Parameters(0.51, 0.52)),
+                mapOf("bar" to Multinomial.Parameters(0.31, 0.32)),
+                mapOf("baz" to Gaussian.Parameters(1.0, 1, 2.0, 2))
+        ))
+
+        verify { text1.batchUpdate(listOf("o1" to "yes yes"), Multinomial.Parameters(0.51, 0.52)) }
+        verify { text2.batchUpdate(listOf("o1" to "yes no"), null) }
+        verify { categorical.batchUpdate(listOf("o1" to "nope"), Multinomial.Parameters(0.31, 0.32)) }
+        verify { gaussian.batchUpdate(listOf("o1" to 1.0), Gaussian.Parameters(1.0, 1, 2.0, 2)) }
     }
 
 }

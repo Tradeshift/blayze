@@ -79,4 +79,72 @@ class MultinomialTest {
         assertEquals(-1.7917595, logProb["x"]!!, 1e-6)
     }
 
+    @Test
+    fun test_withParameters_sets_parameters() {
+        val parameters = Multinomial.Parameters(0.0892275415, 0.7363151583)
+        val multinomial = Multinomial().withParameters(parameters)
+
+        assertEquals(multinomial.defaultParams, parameters)
+    }
+
+    @Test
+    fun test_parameters_are_used_when_passed_or_default_when_not_passed_batchAdd() {
+
+        val parameters = Multinomial.Parameters(0.0, 0.73)
+        val multinomial = Multinomial(1.0, 1.0)
+                .batchUpdate(listOf(
+                        "p" to Counter("a", "b"),
+                        "n" to Counter("b", "c")
+                ), parameters)
+                // Set default parameters
+                .withParameters(parameters)
+                .batchUpdate(listOf(
+                        "p" to Counter("a", "b"),
+                        "n" to Counter("b", "c")
+                ))
+
+        val logProb1 = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
+        val logProb2 = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("b", "c"))
+
+        assertEquals(logProb1, logProb2)
+    }
+
+    @Test
+    fun test_parameters_are_used_when_passed_or_default_when_not_passed_logPosteriorPredictive() {
+        /*
+         import numpy as np
+         from tensorflow.distributions import DirichletMultinomial
+         import tensorflow as tf
+         pseudoCount = 0.73
+
+         counts = np.array([[1., 1., 0.], [0., 1., 1.], [0., 0., .0]], dtype=np.float32)
+         alpha = counts+pseudoCount
+         n = np.float32([2.0, 2.0, 2.0]) # number of draws, all 2 since np.sum(x) == 2
+         dm = DirichletMultinomial(n, alpha)
+
+         x = np.array([1, 1, 0])
+
+         with tf.Session() as sess:
+             print(sess.run(dm.log_prob(x)))
+
+         > [-1.2900444 -2.1528764 -1.8801968]
+
+     */
+        val parameters = Multinomial.Parameters(1.0, 0.73)
+
+        val multinomial = Multinomial(1.0, 1.0).batchUpdate(listOf(
+                "p" to Counter("a", "b"),
+                "n" to Counter("b", "c")
+        ))
+
+        val logProb = multinomial.logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"), parameters)
+        // Set default parameters
+        val logProbDefaultParams = multinomial.withParameters(parameters).logPosteriorPredictive(setOf("p", "n", "x"), Counter("a", "b"))
+
+        assertEquals(logProb, logProbDefaultParams)
+        assertEquals(-1.2900444, logProb["p"]!!, 1e-6)
+        assertEquals(-2.1528764, logProb["n"]!!, 1e-6)
+        assertEquals(-1.8801968, logProb["x"]!!, 1e-6)
+    }
+
 }

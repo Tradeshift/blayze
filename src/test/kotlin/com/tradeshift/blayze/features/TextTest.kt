@@ -1,6 +1,8 @@
 package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.collection.Counter
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -64,6 +66,41 @@ class TextTest {
         val actual = text.logPosteriorPredictive(outcomes, "awesome awesome awesome ok")
 
         assertEquals(expected, actual)
+    }
+
+    @Test
+    fun test_withParameters_sets_parameters() {
+        val parameters = Multinomial.Parameters(0.0892275415, 0.7363151583)
+        val text = Text().withParameters(parameters)
+        assertEquals(text.delegate.defaultParams, parameters)
+    }
+
+    @Test
+    fun test_logPosteriorPredictive_delegates_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Text(mult).logPosteriorPredictive(setOf("foo", "bar"), "baz", Multinomial.Parameters(0.32, 0.23))
+        verify { mult.logPosteriorPredictive(setOf("foo", "bar"), Counter("baz"), Multinomial.Parameters(0.32, 0.23)) }
+    }
+
+    @Test
+    fun test_logPosteriorPredictive_delegates_null_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Text(mult).logPosteriorPredictive(setOf("foo", "bar"), "baz", null)
+        verify { mult.logPosteriorPredictive(setOf("foo", "bar"), Counter("baz"), null) }
+    }
+
+    @Test
+    fun test_batchadd_delegates_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Text(mult).batchUpdate(listOf("baz" to "foo"), Multinomial.Parameters(0.32, 0.23))
+        verify { mult.batchUpdate(listOf("baz" to Counter("foo")), Multinomial.Parameters(0.32, 0.23)) }
+    }
+
+    @Test
+    fun test_batchadd_delegates_null_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Text(mult).batchUpdate(listOf("baz" to "foo"), null)
+        verify { mult.batchUpdate(listOf("baz" to Counter("foo")), null) }
     }
 
 }

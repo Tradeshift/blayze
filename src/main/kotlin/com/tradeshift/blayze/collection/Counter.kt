@@ -12,4 +12,16 @@ class Counter<T>(private val counts: Map<T, Int> = mapOf()) : Map<T, Int> by cou
         return counts[key] ?: 0
     }
 
+    override fun equals(other: Any?): Boolean {
+        return counts == other
+    }
+
+    override fun hashCode(): Int {
+        return counts.hashCode()
+    }
+
+    override fun toString(): String {
+        return counts.toString()
+    }
+
 }
