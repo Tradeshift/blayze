@@ -49,6 +49,5 @@ class CategoricalTest {
         assertEquals(categorical.delegate.defaultParams, parameters)
     }
 
-    @Test test_
 
 }
