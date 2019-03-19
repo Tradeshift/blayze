@@ -85,10 +85,10 @@ class Model(
     }
 
     private fun <V, P, F : Feature<F, V, P>> withParameters(features: Map<FeatureName, F>, parameters: Map<FeatureName, P>, creator: () -> F ): Map<FeatureName, F> {
-        var cf = features
+        val cf = features.toMutableMap()
         for ((n, p) in parameters) {
             val f = cf[n] ?: creator()
-            cf = cf.plus(n to f.withParameters(p))
+            cf[n] = f.withParameters(p)
         }
         return cf
     }
