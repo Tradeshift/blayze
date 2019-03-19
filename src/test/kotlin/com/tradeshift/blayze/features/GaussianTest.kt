@@ -7,6 +7,27 @@ import kotlin.math.*
 
 class GaussianTest {
 
+    //From https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution
+    /*
+        import numpy as np
+        import scipy
+        d = np.array([20, 30, 40])
+        n = 3.0
+        mu0 = 28.0
+        nu = 2.0
+        alpha = 1.0
+        beta = 120.0
+
+        mup = (nu*mu0 +n*d.mean())/(nu+n)
+        nup = nu+n
+        alphap = alpha + n/2.0
+        betap = beta + 0.5*np.sum((d-d.mean())**2) + (n*nu)/(nu+n)*(d.mean()-mu0)**2/2.0
+
+        scipy.stats.t.pdf(23.0, 2*alphap, loc=mup, scale=np.sqrt(betap*(nup+1)/(nup*alphap)))
+
+    */
+    private val expected = 0.029822246851240995
+
     @Test
     fun outcome_with_less_than_two_samples_returns_log_prob_of_least_likely_outcome() {
         val gauss = Gaussian().batchUpdate(
@@ -127,8 +148,9 @@ class GaussianTest {
         }
     }
 
+
     @Test
-    fun posterior_predictive_with_prior_parameters_is_t_distribution() {
+    fun posterior_predictive_with_parameters_is_t_distribution() {
         val gauss = Gaussian().batchUpdate(
                 listOf(
                         "p" to 20.0,
@@ -137,29 +159,7 @@ class GaussianTest {
                 )
         )
 
-        //From https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution
-        /*
-            import numpy as np
-            import scipy
-            d = np.array([20, 30, 40])
-            n = 3.0
-            mu0 = 28.0
-            nu = 2.0
-            alpha = 1.0
-            beta = 120.0
-
-            mup = (nu*mu0 +n*d.mean())/(nu+n)
-            nup = nu+n
-            alphap = alpha + n/2.0
-            betap = beta + 0.5*np.sum((d-d.mean())**2) + (n*nu)/(nu+n)*(d.mean()-mu0)**2/2.0
-
-            scipy.stats.t.pdf(23.0, 2*alphap, loc=mup, scale=np.sqrt(betap*(nup+1)/(nup*alphap)))
-
-        */
-        val expected = 0.029822246851240995
-
-        val x = 23.0
-        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, Gaussian.Parameters(mu0 = 28.0, nu = 2, beta = 120.0, alpha = 1))["p"]!!)
+        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), 23.0, Gaussian.Parameters(mu0 = 28.0, nu = 2, beta = 120.0, alpha = 1))["p"]!!)
 
         assertEquals(expected, actual, 1e-6)
     }
@@ -174,29 +174,7 @@ class GaussianTest {
                 )
         )
 
-        //From https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution
-        /*
-            import numpy as np
-            import scipy
-            d = np.array([20, 30, 40])
-            n = 3.0
-            mu0 = 28.0
-            nu = 2.0
-            alpha = 1.0
-            beta = 120.0
-
-            mup = (nu*mu0 +n*d.mean())/(nu+n)
-            nup = nu+n
-            alphap = alpha + n/2.0
-            betap = beta + 0.5*np.sum((d-d.mean())**2) + (n*nu)/(nu+n)*(d.mean()-mu0)**2/2.0
-
-            scipy.stats.t.pdf(23.0, 2*alphap, loc=mup, scale=np.sqrt(betap*(nup+1)/(nup*alphap)))
-
-        */
-        val expected = 0.029822246851240995
-
-        val x = 23.0
-        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, null)["p"]!!)
+        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), 23.0, null)["p"]!!)
 
         assertEquals(expected, actual, 1e-6)
     }
@@ -209,7 +187,7 @@ class GaussianTest {
     }
 
     @Test
-    fun can_be_serialized_and_deserialized(){
+    fun can_be_serialized_and_deserialized() {
         val gaussian = Gaussian(Gaussian.Parameters(0.1, 2, 0.3, 4)).batchUpdate(listOf(
                 "yes" to 1.0,
                 "yes" to 2.0,

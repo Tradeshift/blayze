@@ -27,4 +27,10 @@ class CounterTest {
         assertEquals(1, c["baz"])
     }
 
+
+    @Test
+    fun test_counters_are_equal() {
+        assertEquals(Counter("baz"), Counter("baz"))
+    }
+
 }

@@ -1,6 +1,8 @@
 package com.tradeshift.blayze.features
 
 import com.tradeshift.blayze.collection.Counter
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -49,6 +51,32 @@ class CategoricalTest {
         assertEquals(categorical.delegate.defaultParams, parameters)
     }
 
-    @Test test_
+    @Test
+    fun test_logPosteriorPredictive_delegates_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Categorical(mult).logPosteriorPredictive(setOf("foo", "bar"), "baz", Multinomial.Parameters(0.32, 0.23))
+        verify { mult.logPosteriorPredictive(setOf("foo", "bar"), Counter("baz"), Multinomial.Parameters(0.32, 0.23)) }
+    }
+
+    @Test
+    fun test_logPosteriorPredictive_delegates_null_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Categorical(mult).logPosteriorPredictive(setOf("foo", "bar"), "baz", null)
+        verify { mult.logPosteriorPredictive(setOf("foo", "bar"), Counter("baz"), null) }
+    }
+
+    @Test
+    fun test_batchadd_delegates_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Categorical(mult).batchUpdate(listOf("baz" to "foo"), Multinomial.Parameters(0.32, 0.23))
+        verify { mult.batchUpdate(listOf("baz" to Counter("foo")), Multinomial.Parameters(0.32, 0.23)) }
+    }
+
+    @Test
+    fun test_batchadd_delegates_null_parameters_to_multinomial() {
+        val mult = mockk<Multinomial>(relaxed = true)
+        Categorical(mult).batchUpdate(listOf("baz" to "foo"), null)
+        verify { mult.batchUpdate(listOf("baz" to Counter("foo")), null) }
+    }
 
 }
