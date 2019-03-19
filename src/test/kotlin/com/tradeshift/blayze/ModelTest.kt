@@ -2,7 +2,6 @@ import com.tradeshift.blayze.Model
 import com.tradeshift.blayze.Protos
 import com.tradeshift.blayze.collection.Counter
 import com.tradeshift.blayze.dto.Inputs
-import com.tradeshift.blayze.dto.Outcome
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Categorical
 import com.tradeshift.blayze.features.Gaussian
@@ -12,9 +11,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.streams.toList
 
 
 class ModelTest {
@@ -79,6 +78,19 @@ class ModelTest {
 
         assertEquals(0.333333333, suggestions["p"]!!, 0.0000001)
         assertEquals(0.666666666, suggestions["n"]!!, 0.0000001)
+    }
+
+    /**
+     * This fails when you make backwards incompatible changes to the protobuf format.
+     * If that is intended then bump the [Model.serializationVersion] and update this test.
+     * Serialized model and expected values from revision cdd3cd6
+     */
+    @Test
+    fun can_deserialize_current_version_protobuf_model() {
+        val model = Model.fromProto(Protos.Model.parseFrom(this::class.java.getResource("/model-v3.pb").readBytes()))
+        val output = model.predict(Inputs(mapOf("text1" to "foo bar bar", "text2" to "baz baz"), mapOf("c1" to "no", "c2" to "no"), mapOf("g1" to 1.3, "g2" to 2.4)))
+
+        assertEquals(mapOf("out1" to 0.46795978470600214, "out2" to 0.5320402152939978), output)
     }
 
     @Test
@@ -434,9 +446,9 @@ class ModelTest {
 
     @Test
     fun withParameters_adds_feature_with_parameters_if_feature_does_not_exist() {
-        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
-        val parametersCategorical = Multinomial.Parameters( 0.1080993273, 0.4034269615)
-        val parametersGaussian = Gaussian.Parameters( 0.8392657028, 22, 0.83926570281, 221)
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters(0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters(0.8392657028, 22, 0.83926570281, 221)
 
         val model = Model()
                 .withParameters(Model.Parameters(
@@ -445,37 +457,37 @@ class ModelTest {
                         gaussian = mapOf("gFoo" to parametersGaussian)))
 
 
-        assertTrue( model.textFeatures.containsKey("tFoo") )
+        assertTrue(model.textFeatures.containsKey("tFoo"))
         assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
 
-        assertTrue( model.categoricalFeatures.containsKey("cFoo") )
+        assertTrue(model.categoricalFeatures.containsKey("cFoo"))
         assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
 
-        assertTrue( model.gaussianFeatures.containsKey("gFoo") )
+        assertTrue(model.gaussianFeatures.containsKey("gFoo"))
         assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
 
     }
 
     @Test
     fun withParameters_set_default_parameter_for_existing_features() {
-        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
-        val parametersCategorical = Multinomial.Parameters( 0.1080993273, 0.4034269615)
-        val parametersGaussian = Gaussian.Parameters( 0.8392657028, 22, 0.83926570281, 221)
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
+        val parametersCategorical = Multinomial.Parameters(0.1080993273, 0.4034269615)
+        val parametersGaussian = Gaussian.Parameters(0.8392657028, 22, 0.83926570281, 221)
 
-        val model = Model(textFeatures = mapOf( "tFoo" to Text()), categoricalFeatures = mapOf("cFoo" to Categorical()), gaussianFeatures = mapOf("gFoo" to Gaussian()))
+        val model = Model(textFeatures = mapOf("tFoo" to Text()), categoricalFeatures = mapOf("cFoo" to Categorical()), gaussianFeatures = mapOf("gFoo" to Gaussian()))
                 .withParameters(Model.Parameters(
                         text = mapOf("tFoo" to parametersText),
                         categorical = mapOf("cFoo" to parametersCategorical),
                         gaussian = mapOf("gFoo" to parametersGaussian)))
 
 
-        assertTrue( model.textFeatures.containsKey("tFoo") )
+        assertTrue(model.textFeatures.containsKey("tFoo"))
         assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)
 
-        assertTrue( model.categoricalFeatures.containsKey("cFoo") )
+        assertTrue(model.categoricalFeatures.containsKey("cFoo"))
         assertEquals(model.categoricalFeatures.get("cFoo")!!.delegate.defaultParams, parametersCategorical)
 
-        assertTrue( model.gaussianFeatures.containsKey("gFoo") )
+        assertTrue(model.gaussianFeatures.containsKey("gFoo"))
         assertEquals(model.gaussianFeatures.get("gFoo")!!.defaultParameters, parametersGaussian)
 
     }
@@ -485,10 +497,10 @@ class ModelTest {
         val spyModel = spyk(Model())
 
         val update = Update(Inputs(text = mapOf("tFoo" to "yes yes")), "outFoo")
-        val parametersText = Multinomial.Parameters( 0.8392657028, 0.5245625129)
+        val parametersText = Multinomial.Parameters(0.8392657028, 0.5245625129)
         val parameter = (Model.Parameters(text = mapOf("tFoo" to parametersText)))
 
-        spyModel.add(update , parameter)
+        spyModel.add(update, parameter)
 
         verify { spyModel.batchAdd(listOf(update), parameter) }
     }
