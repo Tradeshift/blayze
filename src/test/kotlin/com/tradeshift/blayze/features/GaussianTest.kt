@@ -1,5 +1,6 @@
 package com.tradeshift.blayze.features
 
+import com.tradeshift.blayze.Protos
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.*
@@ -161,6 +162,66 @@ class GaussianTest {
         val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, Gaussian.Parameters(mu0 = 28.0, nu = 2, beta = 120.0, alpha = 1))["p"]!!)
 
         assertEquals(expected, actual, 1e-6)
+    }
+
+    @Test
+    fun posterior_predictive_uses_default_parameters_if_null_is_given() {
+        val gauss = Gaussian(Gaussian.Parameters(mu0 = 28.0, nu = 2, beta = 120.0, alpha = 1)).batchUpdate(
+                listOf(
+                        "p" to 20.0,
+                        "p" to 30.0,
+                        "p" to 40.0
+                )
+        )
+
+        //From https://en.wikipedia.org/wiki/Conjugate_prior#When_likelihood_function_is_a_continuous_distribution
+        /*
+            import numpy as np
+            import scipy
+            d = np.array([20, 30, 40])
+            n = 3.0
+            mu0 = 28.0
+            nu = 2.0
+            alpha = 1.0
+            beta = 120.0
+
+            mup = (nu*mu0 +n*d.mean())/(nu+n)
+            nup = nu+n
+            alphap = alpha + n/2.0
+            betap = beta + 0.5*np.sum((d-d.mean())**2) + (n*nu)/(nu+n)*(d.mean()-mu0)**2/2.0
+
+            scipy.stats.t.pdf(23.0, 2*alphap, loc=mup, scale=np.sqrt(betap*(nup+1)/(nup*alphap)))
+
+        */
+        val expected = 0.029822246851240995
+
+        val x = 23.0
+        val actual = Math.exp(gauss.logPosteriorPredictive(setOf("p"), x, null)["p"]!!)
+
+        assertEquals(expected, actual, 1e-6)
+    }
+
+    @Test
+    fun with_parameters_sets_the_default_parameters() {
+        val expected = Gaussian.Parameters(0.1, 2, 0.3, 4)
+        val g = Gaussian().withParameters(expected)
+        assertEquals(expected, g.defaultParameters)
+    }
+
+    @Test
+    fun can_be_serialized_and_deserialized(){
+        val gaussian = Gaussian(Gaussian.Parameters(0.1, 2, 0.3, 4)).batchUpdate(listOf(
+                "yes" to 1.0,
+                "yes" to 2.0,
+                "yes" to 3.0,
+                "no" to -1.0,
+                "no" to -2.0,
+                "no" to -3.0
+        ))
+        val expected = gaussian.logPosteriorPredictive(setOf("yes", "no"), 1.0, null)
+        val deserialized = Gaussian.fromProto(Protos.Gaussian.parseFrom(gaussian.toProto().toByteArray()))
+        assertEquals(gaussian.defaultParameters, deserialized.defaultParameters)
+        assertEquals(expected, deserialized.logPosteriorPredictive(setOf("yes", "no"), 1.0, null))
     }
 
 }
