@@ -50,7 +50,7 @@ class CategoricalTest {
 
         assertEquals(categorical.delegate.defaultParams, parameters)
     }
-
+    
     @Test
     fun test_logPosteriorPredictive_delegates_parameters_to_multinomial() {
         val mult = mockk<Multinomial>(relaxed = true)
