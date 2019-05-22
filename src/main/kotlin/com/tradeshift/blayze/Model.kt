@@ -3,6 +3,7 @@ package com.tradeshift.blayze
 import com.tradeshift.blayze.dto.FeatureName
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Outcome
+import com.tradeshift.blayze.dto.Parameters
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.*
 import kotlin.math.ln
@@ -53,21 +54,6 @@ class Model(
         val gaussianFeatures: Map<FeatureName, Gaussian> = mapOf(),
         val priorPseudoCount: Int = 0
 ) {
-
-    /**
-     * Parameters of a model.
-     *
-     * @param priorPseudoCount Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
-     * @param text parameters of the text features. See [Multinomial.Parameters].
-     * @param categorical parameters of the categorical features. See [Multinomial.Parameters].
-     * @param gaussian parameters of the gaussian features. See [Gaussian.Parameters].
-     */
-    data class Parameters(
-            val priorPseudoCount: Int = 0,
-            val text: Map<FeatureName, Multinomial.Parameters> = mapOf(),
-            val categorical: Map<FeatureName, Multinomial.Parameters> = mapOf(),
-            val gaussian: Map<FeatureName, Gaussian.Parameters> = mapOf()
-    )
 
     // Just a tiny optimization to cache the default logPrior
     private val defaultLogPrior: Map<String, Double> by lazy {
@@ -133,16 +119,16 @@ class Model(
      * @param parameters The [Parameters] to use when predicting. If null, the default parameters are used.
      * @return predicted outcomes and their probability, e.g. {"positive": 0.3124, "negative": 0.6876}
      */
-    fun predict(inputs: Inputs, parameters: Parameters? = null): Map<Outcome, Double> {
+    fun predict(inputs: Inputs): Map<Outcome, Double> {
         if (priorCounts.isEmpty()) {
             return mapOf()
         }
 
         val maps = mutableListOf<Map<Outcome, Double>>()
-        maps.add(if (parameters == null) defaultLogPrior else logPrior(parameters.priorPseudoCount))
-        maps.addAll(logProbabilities(textFeatures, inputs.text, parameters?.text ?: mapOf()))
-        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, parameters?.categorical ?: mapOf()))
-        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, parameters?.gaussian ?: mapOf()))
+        maps.add(if (inputs.parameters == null) defaultLogPrior else logPrior(inputs.parameters.priorPseudoCount))
+        maps.addAll(logProbabilities(textFeatures, inputs.text, inputs.parameters?.text ?: mapOf()))
+        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, inputs.parameters?.categorical ?: mapOf()))
+        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, inputs.parameters?.gaussian ?: mapOf()))
 
         return normalize(sumMaps(maps))
     }
@@ -155,8 +141,8 @@ class Model(
      *
      * @return new updated Model
      */
-    fun add(update: Update, parameters: Parameters? = null): Model {
-        return batchAdd(listOf(update), parameters)
+    fun add(update: Update): Model {
+        return batchAdd(listOf(update))
     }
 
     /**
@@ -167,12 +153,12 @@ class Model(
      *
      * @return new updated Model
      */
-    fun batchAdd(updates: List<Update>, parameters: Parameters? = null): Model {
+    fun batchAdd(updates: List<Update>): Model {
         val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
 
-        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, parameters?.categorical ?: mapOf())
-        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, parameters?.text ?: mapOf())
-        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, parameters?.gaussian ?: mapOf())
+        val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, { it.categorical } )
+        val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, { it.text })
+        val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, { it.gaussian } )
 
         return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures)
     }
@@ -216,26 +202,38 @@ class Model(
             creator: () -> F,
             updates: List<Update>,
             extractor: (Inputs) -> Map<FeatureName, V>,
-            parameters: Map<FeatureName, P>
+            parameterExtractor: (Parameters) -> Map<FeatureName, P>
     ): Map<FeatureName, F> {
 
         val outcomes = updates.map { it.outcome }
         val values = updates.map { extractor(it.inputs) }
+        val parameters = updates.map { parameterExtractor(it.inputs.parameters) }
 
-        val data: Map<FeatureName, List<Pair<Outcome, V>>> = zipOutcomesAndValues(outcomes, values)
+        val data: Map<FeatureName, List<Triple<Outcome, V, P?>>> = zipOutcomesValuesAndParameters(outcomes, values, parameters)
+
         val features = old.toMutableMap()
-        for ((name, pairs) in data) {
+        for ((name, Triplets) in data) {
             val f = features.getOrDefault(name, creator())
-            features[name] = f.batchUpdate(pairs, parameters[name])
+            features[name] = f.batchUpdate(Triplets)
         }
         return features
     }
 
-    private fun <V> zipOutcomesAndValues(outcomes: List<Outcome>, values: List<Map<FeatureName, V>>): Map<FeatureName, List<Pair<Outcome, V>>> {
-        val result = mutableMapOf<FeatureName, MutableList<Pair<Outcome, V>>>()
-        for ((outcome, feature) in outcomes zip values) {
+    private fun <V, P> zipOutcomesValuesAndParameters(outcomes: List<Outcome>,
+                                                      values: List<Map<FeatureName, V>>,
+                                                      parameters: List<Map<FeatureName, P?>>):
+            Map<FeatureName, List<Triple<Outcome, V, P?>>>
+    {
+        val result = mutableMapOf<FeatureName, MutableList<Triple<Outcome, V, P?>>>()
+        val zippedLists =
+                ( outcomes zip values zip parameters )
+                .map { Triple(it.first.first, it.first.second, it.second) }
+
+        for ((outcome, feature, parameter) in zippedLists) {
             for ((featureName, value) in feature) {
-                result.getOrPut(featureName, { mutableListOf() }).add(outcome to value)
+                result
+                        .getOrPut(featureName, { mutableListOf() })
+                        .add(Triple(outcome, value, parameter.getOrDefault(featureName, null)))
             }
         }
         return result

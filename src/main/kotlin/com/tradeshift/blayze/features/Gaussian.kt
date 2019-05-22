@@ -43,7 +43,22 @@ class Gaussian private constructor(
             val nu: Int = 0,
             val beta: Double = 0.0,
             val alpha: Int = 0
-    )
+    ){
+        fun toProto(): Protos.GaussianParameters {
+            return Protos.GaussianParameters.newBuilder()
+                    .setMu0(mu0)
+                    .setNu(nu)
+                    .setBeta(beta)
+                    .setAlpha(alpha)
+                    .build()
+        }
+
+        companion object {
+            fun fromProto(proto: Protos.GaussianParameters): Parameters {
+                return Parameters(proto.mu0, proto.nu, proto.beta, proto.alpha)
+            }
+        }
+    }
 
     /**
      * Create a new gaussian feature.
@@ -63,7 +78,7 @@ class Gaussian private constructor(
      *
      * Parameters are not used.
      */
-    override fun batchUpdate(updates: List<Pair<Outcome, Double>>, parameters: Parameters?): Gaussian {
+    override fun batchUpdate(updates: List<Triple<Outcome, Double, Parameters?>>): Gaussian {
         val map = estimators.toMutableMap()
         for ((outcome, x) in updates) {
             map[outcome] = map[outcome]?.add(x) ?: StreamingEstimator(x)

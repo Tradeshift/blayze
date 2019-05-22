@@ -21,7 +21,21 @@ class Multinomial private constructor(
     data class Parameters(
             val includeFeatureProbability: Double = 1.0,
             val pseudoCount: Double = 0.1
-    )
+    ){
+        fun toProto(): Protos.MultinomialParameters {
+            return Protos.MultinomialParameters.newBuilder()
+                    .setIncludeFeatureProbability(includeFeatureProbability)
+                    .setPseudoCount(pseudoCount)
+                    .build()
+        }
+
+        companion object {
+            fun fromProto(proto: Protos.MultinomialParameters): Parameters {
+                return Parameters(proto.includeFeatureProbability, proto.pseudoCount)
+            }
+        }
+    }
+
 
     /**
      * A feature for multinomial data.
@@ -51,13 +65,21 @@ class Multinomial private constructor(
     }
 
 
-    override fun batchUpdate(updates: List<Pair<Outcome, Counter<String>>>, parameters: Parameters?): Multinomial {
+    override fun batchUpdate(updates: List<Triple<Outcome, Counter<String>, Parameters?>>): Multinomial {
         val featuresCopy = features.toMutableMap()
         val outcomesCopy = outcomeToIdx.toMutableMap()
 
         fun getOrCreateIndex(key: Outcome) = outcomesCopy.getOrPut(key) { outcomesCopy.size }
 
-        val formattedUpdates = invertUpdates(sampleUpdates(updates.asSequence(), (parameters ?: defaultParams).includeFeatureProbability))
+        val formattedUpdates = invertUpdates(
+                sampleUpdates(
+                        updates.map {
+                            Triple( it.first, it.second, (it.third ?: defaultParams)
+                                    .includeFeatureProbability) }
+                                .asSequence()
+                )
+        )
+
         for ((feature, counter) in formattedUpdates) {
             val indexToUpdate = counter.mapKeys { getOrCreateIndex(it.key) }
             val vec = SparseIntVector.fromMap(indexToUpdate)
@@ -117,10 +139,10 @@ class Multinomial private constructor(
         return result
     }
 
-    private fun sampleUpdates(updates: Sequence<Pair<Outcome, Counter<String>>>, includeFeatureProbability: Double): Sequence<Pair<Outcome, Counter<String>>> {
-        fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
+    private fun sampleUpdates(updates: Sequence<Triple<Outcome, Counter<String>, Double>>): Sequence<Pair<Outcome, Counter<String>>> {
         val knownFeatures = features.keys.toMutableSet()
-        return updates.map { (outcome, counter) ->
+        return updates.map { (outcome, counter, includeFeatureProbability) ->
+            fun sampleFeature(count: Int) = Math.random() < (1.0 - (1.0 - includeFeatureProbability).pow(count))
             val filteredFeatures = counter.filter { it.key in knownFeatures || sampleFeature(it.value) }
             knownFeatures.addAll(filteredFeatures.keys)
             outcome to Counter(filteredFeatures)

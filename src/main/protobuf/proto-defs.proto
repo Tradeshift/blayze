@@ -50,6 +50,26 @@ message Inputs {
     map<string, string> categorical = 1;
     map<string, string> text = 2;
     map<string, double> gaussian = 3;
+    Parameters parameters = 4;
+}
+
+message Parameters{
+    int32 priorPseudoCount = 1;
+    map<string, MultinomialParameters> textParameters = 2;
+    map<string, MultinomialParameters> categoricalParameters = 3;
+    map<string, GaussianParameters> gaussianParameters = 4;
+}
+
+message MultinomialParameters {
+    double includeFeatureProbability = 1;
+    double pseudoCount = 2;
+}
+
+message GaussianParameters {
+    double mu0 = 1;
+    int32 nu = 2;
+    double beta = 3;
+    int32 alpha = 4;
 }
 
 message Update {

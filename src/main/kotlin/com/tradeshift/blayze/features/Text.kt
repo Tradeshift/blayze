@@ -29,9 +29,9 @@ class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureVal
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, parameters: Multinomial.Parameters?): Text {
-        val words = updates.map { Pair(it.first, WordCounter.countWords(it.second)) }
-        return Text(delegate.batchUpdate(words, parameters))
+    override fun batchUpdate(updates: List<Triple<Outcome, FeatureValue, Multinomial.Parameters?>>): Text {
+        val words = updates.map { Triple(it.first, WordCounter.countWords(it.second), it.third) }
+        return Text(delegate.batchUpdate(words))
     }
 
     override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, parameters: Multinomial.Parameters?): Map<Outcome, Double> {

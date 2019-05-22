@@ -26,9 +26,9 @@ class Categorical(val delegate: Multinomial = Multinomial()) : Feature<Categoric
         }
     }
 
-    override fun batchUpdate(updates: List<Pair<Outcome, FeatureValue>>, parameters: Multinomial.Parameters?): Categorical {
-        val categories = updates.map { Pair(it.first, Counter(it.second)) }
-        return Categorical(delegate.batchUpdate(categories, parameters))
+    override fun batchUpdate(updates: List<Triple<Outcome, FeatureValue, Multinomial.Parameters?>>): Categorical {
+        val categories = updates.map { Triple(it.first, Counter(it.second), it.third) }
+        return Categorical(delegate.batchUpdate(categories))
     }
 
     override fun logPosteriorPredictive(outcomes: Set<Outcome>, value: FeatureValue, parameters: Multinomial.Parameters?): Map<Outcome, Double> {
