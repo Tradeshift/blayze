@@ -24,7 +24,7 @@ interface Feature<F, V, P> {
      * Returns a new feature updated with the updates.
      * If [parameters] is null, the default parameters of the feature will be used. See [withParameters].
      */
-    fun batchUpdate(updates: List<Pair<Outcome, V>>, parameters: P? = null): F
+    fun batchUpdate(updates: List<Triple<Outcome, V, P?>>): F
 
     /**
      * Returns a new feature with [parameters] as the default parameters.

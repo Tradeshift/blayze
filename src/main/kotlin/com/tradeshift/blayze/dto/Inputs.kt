@@ -1,6 +1,8 @@
 package com.tradeshift.blayze.dto
 
 import com.tradeshift.blayze.Protos
+import com.tradeshift.blayze.features.Gaussian
+import com.tradeshift.blayze.features.Multinomial
 
 typealias FeatureName = String
 typealias FeatureValue = String
@@ -21,25 +23,42 @@ typealias Outcome = String
  *          },
  *          "gaussian": {
  *              "n_words": 482
+ *          },
+ *          "parameters" : {
+ *              "textParameters": {
+ *                  "subject": {
+ *                      "includeFeatureProbability": 0.5,
+ *                      "pseudoCount": 1
+ *                  }
+ *              }
  *          }
  *      }
  */
+
 data class Inputs(
         val text: Map<FeatureName, FeatureValue> = mapOf(),
         val categorical: Map<FeatureName, FeatureValue> = mapOf(),
-        val gaussian: Map<FeatureName, Double> = mapOf()
+        val gaussian: Map<FeatureName, Double> = mapOf(),
+        val parameters: Parameters = Parameters()
+
 ) {
     fun toProto(): Protos.Inputs {
         return Protos.Inputs.newBuilder()
                 .putAllText(text)
                 .putAllCategorical(categorical)
                 .putAllGaussian(gaussian)
+                .setParameters(parameters.toProto())
                 .build()
     }
 
     companion object {
         fun fromProto(proto: Protos.Inputs): Inputs {
-            return Inputs(proto.textMap, proto.categoricalMap, proto.gaussianMap)
+            return Inputs(
+                    proto.textMap,
+                    proto.categoricalMap,
+                    proto.gaussianMap,
+                    Parameters.fromProto(proto.parameters)
+            )
         }
     }
 }
