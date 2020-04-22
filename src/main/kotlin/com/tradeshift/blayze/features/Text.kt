@@ -7,9 +7,8 @@ import com.tradeshift.blayze.dto.Outcome
 
 
 /**
- * A feature for free text, e.g. reviews, comments, email messages, etc. Does simple pre-processing and splits the text into words.
- *
- * The pre-processing replaces all non-letters and non-numbers with spaces, lowercases, splits on spaces and finally removes english stopwords.
+ * A feature for free text, e.g. reviews, comments, email messages, etc. Lowercases and splits the text into words on spaces.
+ * Text processing is intentionally minimal. To get good results on your data you might have to do additional preprocessing.
  */
 class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureValue, Multinomial.Parameters> {
 
@@ -40,19 +39,8 @@ class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureVal
     }
 
     object WordCounter {
-        private val stopWords = WordCounter::class.java.getResource("/english-stop-words-large.txt")
-                .readText().split("\n").toSet()
-
         fun countWords(q: String): Counter<String> {
-            // https://www.regular-expressions.info/unicode.html
-            val words = q
-                    .replace("[^\\p{L}\\p{N}]+".toRegex(), " ") // only keep any kind of letter and numbers from any language, others become space
-                    .trim()
-                    .toLowerCase()
-                    .split(" ")
-                    .filter { it !in stopWords }
-            // with this setup, the 20newsgroup score is above 0.64
-
+            val words = q.toLowerCase().split(" ").filter { it.isNotEmpty() }
             return Counter(words)
         }
     }
