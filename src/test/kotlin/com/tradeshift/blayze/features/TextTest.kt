@@ -26,24 +26,6 @@ class TextTest {
     }
 
     @Test
-    fun stop_words_are_removed() {
-        val text = Text(multinomial)
-        val expected = text.logPosteriorPredictive(outcomes, "awesome awesome awesome ok")
-        val actual = text.logPosteriorPredictive(outcomes, "the the a he awesome awesome awesome ok")
-
-        assertEquals(expected, actual)
-    }
-
-    @Test
-    fun special_chars_are_replaced_by_space() {
-        val text = Text(multinomial)
-        val expected = text.logPosteriorPredictive(outcomes, "awesome awesome ok")
-        val actual = text.logPosteriorPredictive(outcomes, "awesome!;;\nawesome!!    \t !.,!ok")
-
-        assertEquals(expected, actual)
-    }
-
-    @Test
     fun batch_update_sums_seen_words() {
         val mult = Multinomial(pseudoCount = 1.0).batchUpdate(listOf(
                 "p" to Counter(mapOf("awesome" to 7, "ok" to 19, "terrible" to 3)),
@@ -102,5 +84,4 @@ class TextTest {
         Text(mult).batchUpdate(listOf("baz" to "foo"), null)
         verify { mult.batchUpdate(listOf("baz" to Counter("foo")), null) }
     }
-
 }
