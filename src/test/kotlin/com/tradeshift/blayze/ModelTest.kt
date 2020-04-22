@@ -15,7 +15,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-
 class ModelTest {
 
     private val priorCounts = mapOf(
@@ -87,7 +86,7 @@ class ModelTest {
      */
     @Test
     fun can_deserialize_current_version_protobuf_model() {
-        val model = Model.fromProto(Protos.Model.parseFrom(this::class.java.getResource("/model-v3.pb").readBytes()))
+        val model = Model.fromProto(Protos.Model.parseFrom(this::class.java.getResource("/model-v4.pb").readBytes()))
         val output = model.predict(Inputs(mapOf("text1" to "foo bar bar", "text2" to "baz baz"), mapOf("c1" to "no", "c2" to "no"), mapOf("g1" to 1.3, "g2" to 2.4)))
 
         assertEquals(mapOf("out1" to 0.46795978470600214, "out2" to 0.5320402152939978), output)

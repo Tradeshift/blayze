@@ -110,7 +110,7 @@ class Model(
     }
 
     companion object {
-        private const val serializationVersion = 3
+        private const val serializationVersion = 4
 
         fun fromProto(proto: Protos.Model): Model {
             if (proto.modelVersion != serializationVersion) {
