@@ -145,9 +145,9 @@
             <plugin>
                 <groupId>org.honton.chas</groupId>
                 <artifactId>exists-maven-plugin</artifactId>
-                <version>0.0.5</version>
+                <version>0.3.0</version>
                 <configuration>
-                    <repository>http://central.maven.org/maven2/</repository>
+                    <repository>https://repo1.maven.org</repository>
                     <failIfExists>true</failIfExists>
                 </configuration>
                 <executions>
