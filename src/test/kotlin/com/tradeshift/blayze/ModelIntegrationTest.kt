@@ -15,7 +15,6 @@ class ModelIntegrationTest {
         val train = newsgroup("/20newsgroup_train.txt")
         val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.1)))).batchAdd(train)
 
-
         val test = newsgroup("/20newsgroup_test.txt")
         val acc = test
                 .parallelStream()
@@ -43,13 +42,19 @@ class ModelIntegrationTest {
     private fun newsgroup(fname: String): List<Update> {
         val lines = this::class.java.getResource(fname).readText(Charsets.UTF_8).split("\n")
         val updates = mutableListOf<Update>()
+        val stopWords = ModelIntegrationTest::class.java.getResource("/english-stop-words-large.txt").readText().split("\n").toSet()
 
         for (line in lines) {
             val split = line.split(" ".toRegex(), 2).toTypedArray()
             val outcome = split[0]
             var f = Inputs()
             if (split.size == 2) { //some are legit empty
-                f = Inputs(mapOf("q" to split[1]))
+                val normalizedText = split[1]
+                        .replace("[^\\p{L}\\p{N}]+".toRegex(), " ")
+                        .split(" ")
+                        .filter { it !in stopWords }
+                        .joinToString(separator = " ")
+                f = Inputs(mapOf("q" to normalizedText))
             }
             updates.add(Update(f, outcome))
         }
