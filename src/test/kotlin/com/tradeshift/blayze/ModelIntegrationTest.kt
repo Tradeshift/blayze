@@ -13,7 +13,11 @@ class ModelIntegrationTest {
     @Test
     fun can_fit_20newsgroup() {
         val train = newsgroup("/20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.1)))).batchAdd(train)
+        val model = Model().withParameters(
+                Model.Parameters(
+                        text = mapOf("q" to Multinomial.Parameters(pseudoCount = 0.1))
+                )
+        ).batchAdd(train)
 
         val test = newsgroup("/20newsgroup_test.txt")
         val acc = test

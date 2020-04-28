@@ -64,7 +64,7 @@ class ModelTest {
                     )
     )
 
-    val model = Model(priorCounts, textFeatures, categoricalFeatures)
+    val model = Model(priorCounts, textFeatures, categoricalFeatures, mapOf(), 0)
 
     @Test
     fun categorical_features_can_be_serialized_and_deserialized() {
@@ -192,7 +192,13 @@ class ModelTest {
 
     @Test
     fun adding_empty_batches_does_not_delete_features() {
-        var model = Model(textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))))
+        var model = Model(
+                priorCounts = mapOf(),
+                textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))),
+                categoricalFeatures = mapOf(),
+                gaussianFeatures = mapOf(),
+                priorPseudoCount = 0
+        )
         model = model.batchAdd(listOf())
 
         assertEquals(setOf("q"), model.toProto().textFeaturesMap.keys)
@@ -212,7 +218,13 @@ class ModelTest {
 
     @Test
     fun text_parameters_are_saved_when_serialized() {
-        var model = Model(textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))))
+        var model = Model(
+                priorCounts = mapOf(),
+                textFeatures = mapOf("q" to Text(Multinomial(includeFeatureProbability = 0.5, pseudoCount = 0.01))),
+                categoricalFeatures = mapOf(),
+                gaussianFeatures = mapOf(),
+                priorPseudoCount = 0
+        )
         model = model.batchAdd(listOf(
                 Update(Inputs(text = mapOf("q" to "foo bar baz")), "p"),
                 Update(Inputs(text = mapOf("q" to "zap foo foo")), "p")
@@ -258,7 +270,13 @@ class ModelTest {
 
     @Test
     fun can_batch_add_categorical_features() {
-        val model = Model(categoricalFeatures = mapOf("user" to Categorical(pseudoCount = 1.0))).batchAdd(
+        val model = Model(
+                priorCounts = mapOf(),
+                textFeatures = mapOf(),
+                categoricalFeatures = mapOf("user" to Categorical(pseudoCount = 1.0)),
+                gaussianFeatures = mapOf(),
+                priorPseudoCount = 0
+        ).batchAdd(
                 listOf(
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "usd"),
                         Update(Inputs(categorical = mapOf(Pair("user", "alice"))), "eur")
@@ -473,12 +491,13 @@ class ModelTest {
         val parametersCategorical = Multinomial.Parameters(0.1080993273, 0.4034269615)
         val parametersGaussian = Gaussian.Parameters(0.8392657028, 22, 0.83926570281, 221)
 
-        val model = Model(textFeatures = mapOf("tFoo" to Text()), categoricalFeatures = mapOf("cFoo" to Categorical()), gaussianFeatures = mapOf("gFoo" to Gaussian()))
-                .withParameters(Model.Parameters(
+        val model = Model().withParameters(
+                Model.Parameters(
                         text = mapOf("tFoo" to parametersText),
                         categorical = mapOf("cFoo" to parametersCategorical),
-                        gaussian = mapOf("gFoo" to parametersGaussian)))
-
+                        gaussian = mapOf("gFoo" to parametersGaussian)
+                )
+        )
 
         assertTrue(model.textFeatures.containsKey("tFoo"))
         assertEquals(model.textFeatures.get("tFoo")!!.delegate.defaultParams, parametersText)

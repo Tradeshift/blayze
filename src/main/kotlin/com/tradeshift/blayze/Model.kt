@@ -46,13 +46,15 @@ import kotlin.math.ln
  * @param gaussianFeatures      The gaussian features used by this model.
  * @param priorPseudoCount      Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
  */
-class Model(
-        val priorCounts: Map<Outcome, Int> = mapOf(),
-        val textFeatures: Map<FeatureName, Text> = mapOf(),
-        val categoricalFeatures: Map<FeatureName, Categorical> = mapOf(),
-        val gaussianFeatures: Map<FeatureName, Gaussian> = mapOf(),
-        val priorPseudoCount: Int = 0
+class Model internal constructor(
+        val priorCounts: Map<Outcome, Int>,
+        val textFeatures: Map<FeatureName, Text>,
+        val categoricalFeatures: Map<FeatureName, Categorical>,
+        val gaussianFeatures: Map<FeatureName, Gaussian>,
+        val priorPseudoCount: Int
 ) {
+
+    constructor() : this(mapOf(), mapOf(), mapOf(), mapOf(), 0)
 
     /**
      * Parameters of a model.
@@ -174,7 +176,7 @@ class Model(
         val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, parameters?.text ?: mapOf())
         val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, parameters?.gaussian ?: mapOf())
 
-        return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures)
+        return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures, priorPseudoCount)
     }
 
     private fun <F, V, P> logProbabilities(features: Map<FeatureName, Feature<F, V, P>>, values: Map<FeatureName, V>, parameters: Map<FeatureName, P>): List<Map<Outcome, Double>> {
