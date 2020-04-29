@@ -3,7 +3,6 @@ package com.tradeshift.blayze
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Multinomial
-import com.tradeshift.blayze.features.Text
 import org.junit.Assert
 import org.junit.Test
 import kotlin.streams.toList

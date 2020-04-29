@@ -44,37 +44,36 @@ import kotlin.math.ln
  * @param textFeatures          The text features used by this model.
  * @param categoricalFeatures   The categorical features used by this model.
  * @param gaussianFeatures      The gaussian features used by this model.
- * @param priorPseudoCount      Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
+ * @param priorPseudoCounts     Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
  */
 class Model internal constructor(
         val priorCounts: Map<Outcome, Int>,
         val textFeatures: Map<FeatureName, Text>,
         val categoricalFeatures: Map<FeatureName, Categorical>,
         val gaussianFeatures: Map<FeatureName, Gaussian>,
-        val priorPseudoCount: Int
+        val priorPseudoCounts: Map<Outcome, Double>
 ) {
 
-    constructor() : this(mapOf(), mapOf(), mapOf(), mapOf(), 0)
+    constructor() : this(mapOf(), mapOf(), mapOf(), mapOf(), mapOf())
+
+    init {
+        require(priorPseudoCounts.values.all { it >= 0.0 }) { "Prior pseudocounts cannot be negative" }
+    }
 
     /**
      * Parameters of a model.
      *
-     * @param priorPseudoCount Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
+     * @param priorPseudoCounts Pseudo count of observed outcomes. Is added to all outcome counts in the [priorCounts].
      * @param text parameters of the text features. See [Multinomial.Parameters].
      * @param categorical parameters of the categorical features. See [Multinomial.Parameters].
      * @param gaussian parameters of the gaussian features. See [Gaussian.Parameters].
      */
     data class Parameters(
-            val priorPseudoCount: Int = 0,
+            val priorPseudoCounts: Map<Outcome, Double> = mapOf(),
             val text: Map<FeatureName, Multinomial.Parameters> = mapOf(),
             val categorical: Map<FeatureName, Multinomial.Parameters> = mapOf(),
             val gaussian: Map<FeatureName, Gaussian.Parameters> = mapOf()
     )
-
-    // Just a tiny optimization to cache the default logPrior
-    private val defaultLogPrior: Map<String, Double> by lazy {
-        logPrior(priorPseudoCount)
-    }
 
     /**
      * Return a new model with updated default [Parameters].
@@ -83,7 +82,7 @@ class Model internal constructor(
         val text = withParameters(textFeatures, parameters.text, { Text() })
         val categorical = withParameters(categoricalFeatures, parameters.categorical, { Categorical() })
         val gaussian = withParameters(gaussianFeatures, parameters.gaussian, { Gaussian() })
-        return Model(priorCounts, text, categorical, gaussian, parameters.priorPseudoCount)
+        return Model(priorCounts, text, categorical, gaussian, parameters.priorPseudoCounts)
     }
 
     private fun <V, P, F : Feature<F, V, P>> withParameters(features: Map<FeatureName, F>, parameters: Map<FeatureName, P>, creator: () -> F ): Map<FeatureName, F> {
@@ -96,8 +95,8 @@ class Model internal constructor(
     }
 
     // Categorical distribution with dirichlet prior, see https://en.wikipedia.org/wiki/Conjugate_prior#Discrete_distributions
-    private fun logPrior(priorPseudoCount: Int): Map<String, Double> {
-        return priorCounts.mapValues { ln(priorPseudoCount + it.value.toDouble()) } // We don't need to subtract the log(total count), since that is constant w.r.t outcomes, so is normalized away later.
+    private fun logPrior(outcomes: Map<Outcome, Double>): Map<String, Double> {
+        return outcomes.mapValues { ln(it.value) } // We don't need to subtract the log(total count), since that is constant w.r.t outcomes, so is normalized away later.
     }
 
     fun toProto(): Protos.Model {
@@ -107,12 +106,12 @@ class Model internal constructor(
                 .putAllTextFeatures(textFeatures.mapValues { it.value.toProto() })
                 .putAllCategoricalFeatures(categoricalFeatures.mapValues { it.value.toProto() })
                 .putAllGaussianFeatures(gaussianFeatures.mapValues { it.value.toProto() })
-                .setPseudoCount(priorPseudoCount)
+                .putAllPriorPseudoCounts(priorPseudoCounts)
                 .build()
     }
 
     companion object {
-        private const val serializationVersion = 4
+        private const val serializationVersion = 5
 
         fun fromProto(proto: Protos.Model): Model {
             if (proto.modelVersion != serializationVersion) {
@@ -124,7 +123,7 @@ class Model internal constructor(
                     proto.textFeaturesMap.mapValues { Text.fromProto(it.value) },
                     proto.categoricalFeaturesMap.mapValues { Categorical.fromProto(it.value) },
                     proto.gaussianFeaturesMap.mapValues { Gaussian.fromProto(it.value) },
-                    proto.pseudoCount
+                    proto.priorPseudoCountsMap
             )
         }
     }
@@ -136,15 +135,14 @@ class Model internal constructor(
      * @return predicted outcomes and their probability, e.g. {"positive": 0.3124, "negative": 0.6876}
      */
     fun predict(inputs: Inputs, parameters: Parameters? = null): Map<Outcome, Double> {
-        if (priorCounts.isEmpty()) {
-            return mapOf()
-        }
+
+        val allOutcomes = sumMaps(listOf(priorCounts, parameters?.priorPseudoCounts ?: priorPseudoCounts))
 
         val maps = mutableListOf<Map<Outcome, Double>>()
-        maps.add(if (parameters == null) defaultLogPrior else logPrior(parameters.priorPseudoCount))
-        maps.addAll(logProbabilities(textFeatures, inputs.text, parameters?.text ?: mapOf()))
-        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, parameters?.categorical ?: mapOf()))
-        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, parameters?.gaussian ?: mapOf()))
+        maps.add(logPrior(allOutcomes))
+        maps.addAll(logProbabilities(textFeatures, inputs.text, allOutcomes.keys, parameters?.text ?: mapOf()))
+        maps.addAll(logProbabilities(categoricalFeatures, inputs.categorical, allOutcomes.keys, parameters?.categorical ?: mapOf()))
+        maps.addAll(logProbabilities(gaussianFeatures, inputs.gaussian, allOutcomes.keys, parameters?.gaussian ?: mapOf()))
 
         return normalize(sumMaps(maps))
     }
@@ -171,22 +169,25 @@ class Model internal constructor(
      */
     fun batchAdd(updates: List<Update>, parameters: Parameters? = null): Model {
         val newPriorCounts: Map<String, Int> = updates.map { it.outcome }.groupingBy { it }.eachCountTo(priorCounts.toMutableMap())
-
         val newCategoricalFeatures = updateFeatures(categoricalFeatures, { Categorical() }, updates, { it.categorical }, parameters?.categorical ?: mapOf())
         val newTextFeatures = updateFeatures(textFeatures, { Text() }, updates, { it.text }, parameters?.text ?: mapOf())
         val newGaussianFeatures = updateFeatures(gaussianFeatures, { Gaussian() }, updates, { it.gaussian }, parameters?.gaussian ?: mapOf())
 
-        return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures, priorPseudoCount)
+        return Model(newPriorCounts, newTextFeatures, newCategoricalFeatures, newGaussianFeatures, priorPseudoCounts)
     }
 
-    private fun <F, V, P> logProbabilities(features: Map<FeatureName, Feature<F, V, P>>, values: Map<FeatureName, V>, parameters: Map<FeatureName, P>): List<Map<Outcome, Double>> {
+    private fun <F, V, P> logProbabilities(
+            features: Map<FeatureName, Feature<F, V, P>>,
+            values: Map<FeatureName, V>,
+            outcomes: Set<Outcome>,
+            parameters: Map<FeatureName, P>): List<Map<Outcome, Double>> {
         val maps = mutableListOf<Map<Outcome, Double>>()
         for ((featureName, featureValue) in values) {
             val feature = features[featureName]
             if (feature != null) {
-                val logPosteriorPredictive = feature.logPosteriorPredictive(priorCounts.keys, featureValue, parameters[featureName])
-                assert(logPosteriorPredictive.keys == priorCounts.keys) {
-                    "$featureName outcomes did not match logPrior outcomes. Expected ${priorCounts.keys}, Actual: ${logPosteriorPredictive.keys}"
+                val logPosteriorPredictive = feature.logPosteriorPredictive(outcomes, featureValue, parameters[featureName])
+                assert(logPosteriorPredictive.keys == outcomes) {
+                    "$featureName outcomes did not match logPrior outcomes. Expected ${outcomes}, Actual: ${logPosteriorPredictive.keys}"
                 }
                 maps.add(logPosteriorPredictive)
             }
@@ -194,12 +195,12 @@ class Model internal constructor(
         return maps
     }
 
-    private fun sumMaps(maps: List<Map<Outcome, Double>>): Map<Outcome, Double> {
+    private fun sumMaps(maps: List<Map<Outcome, Number>>): Map<Outcome, Double> {
         val sum = mutableMapOf<Outcome, Double>()
         for (map in maps) {
             for ((key, value) in map) {
                 val current = sum.getOrDefault(key, 0.0)
-                sum[key] = current + value
+                sum[key] = current + value.toDouble()
             }
         }
         return sum
