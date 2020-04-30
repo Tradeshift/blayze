@@ -3,7 +3,6 @@ package com.tradeshift.blayze
 import com.tradeshift.blayze.dto.Inputs
 import com.tradeshift.blayze.dto.Update
 import com.tradeshift.blayze.features.Multinomial
-import com.tradeshift.blayze.features.Text
 import org.junit.Assert
 import org.junit.Test
 import kotlin.streams.toList
@@ -13,7 +12,11 @@ class ModelIntegrationTest {
     @Test
     fun can_fit_20newsgroup() {
         val train = newsgroup("/20newsgroup_train.txt")
-        val model = Model(textFeatures = mapOf("q" to Text(Multinomial(pseudoCount = 0.1)))).batchAdd(train)
+        val model = Model().withParameters(
+                Model.Parameters(
+                        text = mapOf("q" to Multinomial.Parameters(pseudoCount = 0.1))
+                )
+        ).batchAdd(train)
 
         val test = newsgroup("/20newsgroup_test.txt")
         val acc = test
