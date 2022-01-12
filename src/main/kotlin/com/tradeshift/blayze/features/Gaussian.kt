@@ -78,7 +78,7 @@ class Gaussian private constructor(
         }
 
         // Giant hack
-        val min = results.values.filterNotNull().min() ?: 0.0
+        val min = results.values.filterNotNull().minOrNull() ?: 0.0
         return results.map { (k, v) -> k to (v ?: min) }.toMap()
     }
 
