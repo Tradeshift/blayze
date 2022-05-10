@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: blayze
+  description: |
+    A fast and flexible Naive Bayes implementation for the JVM
+  annotations:
+    github.com/project-slug: Tradeshift/blayze
+  tags:
+    - kotlin
+spec:
+  type: library
+  owner: ml-team
+  lifecycle: production
