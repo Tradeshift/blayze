@@ -11,9 +11,22 @@ import java.util.TreeMap
 class SparseIntVector private constructor(private val indices: IntArray, private val values: IntArray) : Iterable<Pair<Int, Int>> {
 
     fun add(other: SparseIntVector): SparseIntVector {
+        return apply(other) { m, idx, value ->
+            m[idx] = (m[idx] ?: 0) + value
+        }
+    }
+
+    fun sub(other: SparseIntVector): SparseIntVector {
+        return apply(other) { m, idx, value ->
+            m[idx] = if ((m[idx] ?: 0) > value) m[idx]!! - value else 0
+        }
+    }
+
+
+    private fun apply(other: SparseIntVector, applyFun: (TreeMap<Int, Int>, Int, Int) -> Unit): SparseIntVector {
         val m = TreeMap<Int, Int>()
         m.putAll(this)
-        other.forEach { (idx, value) -> m[idx] = (m[idx] ?: 0) + value }
+        other.forEach { (idx, value) -> applyFun(m, idx, value) }
         return SparseIntVector(m.keys.toIntArray(), m.values.toIntArray())
     }
 
