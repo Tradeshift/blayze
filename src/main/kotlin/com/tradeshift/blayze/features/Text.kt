@@ -48,7 +48,7 @@ class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureVal
             val words = q
                     .replace("[^\\p{L}\\p{N}]+".toRegex(), " ") // only keep any kind of letter and numbers from any language, others become space
                     .trim()
-                    .toLowerCase()
+                    .lowercase()
                     .split(" ")
                     .filter { it !in stopWords }
             // with this setup, the 20newsgroup score is above 0.64

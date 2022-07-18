@@ -66,12 +66,6 @@
         <dependency>
             <!-- Kotlin standard library -->
             <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib-jdk8</artifactId>
-            <version>${kotlin.version}</version>
-        </dependency>
-        <dependency>
-            <!-- Kotlin standard library -->
-            <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
             <version>${kotlin.version}</version>
         </dependency>
@@ -161,7 +155,7 @@
             <plugin>
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <configuration>
-                    <jvmTarget>1.8</jvmTarget>
+                    <jvmTarget>17</jvmTarget>
                 </configuration>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <version>${kotlin.version}</version>
@@ -185,10 +179,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5.1</version>
+                <version>3.8.1</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <release>17</release>
                 </configuration>
                 <executions>
                     <!-- Replacing default-compile as it is treated specially by maven -->
@@ -221,7 +214,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>3.3.0</version>
                 <executions>
                     <execution>
                         <phase>test</phase>
