@@ -6,7 +6,7 @@
 
     <groupId>com.tradeshift</groupId>
     <artifactId>blayze</artifactId>
-    <version>4.1.1</version>
+    <version>4.2.0</version>
     <packaging>jar</packaging>
 
     <properties>
