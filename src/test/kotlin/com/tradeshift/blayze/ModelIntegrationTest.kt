@@ -6,7 +6,6 @@ import com.tradeshift.blayze.features.Multinomial
 import com.tradeshift.blayze.features.Text
 import org.junit.Assert
 import org.junit.Test
-import kotlin.streams.toList
 
 class ModelIntegrationTest {
 
@@ -20,7 +19,7 @@ class ModelIntegrationTest {
         val acc = test
                 .parallelStream()
                 .map {
-                    if (it.outcome == model.predict(it.inputs).maxBy { it.value }?.key) {
+                    if (it.outcome == model.predict(it.inputs).maxByOrNull { it.value }?.key) {
                         1.0
                     } else {
                         0.0
@@ -36,7 +35,7 @@ class ModelIntegrationTest {
     fun can_fit_iris_dataset() {
         val iris = iris()
         val model = Model().batchAdd(iris)
-        val correct = iris.map { if (model.predict(it.inputs).maxBy { it.value }!!.key == it.outcome) 1 else 0 }.sum()
+        val correct = iris.map { if (model.predict(it.inputs).maxByOrNull { it.value }!!.key == it.outcome) 1 else 0 }.sum()
         Assert.assertEquals(143, correct) // sklearn.naive_bayes.GaussianNB gets 144/150 correct.
     }
 
