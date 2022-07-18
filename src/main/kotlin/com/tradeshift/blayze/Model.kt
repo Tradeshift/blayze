@@ -204,7 +204,7 @@ class Model(
     }
 
     private fun normalize(suggestions: Map<Outcome, Double>): Map<Outcome, Double> {
-        val max: Double = suggestions.maxBy({ it.value })?.value ?: 0.0
+        val max: Double = suggestions.maxByOrNull { it.value }?.value ?: 0.0
         val vals = suggestions.mapValues { Math.exp(it.value - max) }
         val norm = vals.values.sum()
         return vals.mapValues { it.value / norm }
