@@ -154,7 +154,7 @@
             <plugin>
                 <artifactId>kotlin-maven-plugin</artifactId>
                 <configuration>
-                    <jvmTarget>17</jvmTarget>
+                    <jvmTarget>11</jvmTarget>
                 </configuration>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <version>${kotlin.version}</version>
@@ -180,7 +180,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
                 <configuration>
-                    <release>17</release>
+                    <release>11</release>
                 </configuration>
                 <executions>
                     <!-- Replacing default-compile as it is treated specially by maven -->

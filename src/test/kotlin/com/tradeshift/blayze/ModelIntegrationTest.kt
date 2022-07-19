@@ -6,6 +6,7 @@ import com.tradeshift.blayze.features.Multinomial
 import com.tradeshift.blayze.features.Text
 import org.junit.Assert
 import org.junit.Test
+import java.util.stream.Collectors
 
 class ModelIntegrationTest {
 
@@ -25,7 +26,7 @@ class ModelIntegrationTest {
                         0.0
                     }
                 }
-                .toList()
+                .collect(Collectors.toList())
                 .average()
 
         Assert.assertTrue("expected $acc > 0.65", acc > 0.65) // sklearn MultinomialNB with a CountVectorizer gets ~0.646
