@@ -65,12 +65,12 @@ jobs:
           token: ${{ secrets.SONAR_TOKEN }}
           host: 'https://sonar.ts.sv'
       - name: Configure git for tradeshiftci
-        if: ${{ github.event.inputs.release == 'true' && contains(github.ref, 'refs/heads/v4') }}
+        if: ${{ contains(github.ref, 'refs/heads/v4') }}
         uses: tradeshift/actions-git/configure-from-gpg-key@v1
         with:
           gpg-key: ${{ secrets.TRADESHIFTCI_GPG_KEY }}  
       - name: Release
-        if: ${{ github.event.inputs.release == 'true' && contains(github.ref, 'refs/heads/v4') }}
+        if: ${{ contains(github.ref, 'refs/heads/v4') }}
         run: |
           SHOULD_RELEASE=$(git show --quiet --format=oneline | grep '\[maven-release-plugin\] prepare for next development iteration' || echo yes)
           if [ "${SHOULD_RELEASE}" = "yes" ]; then
