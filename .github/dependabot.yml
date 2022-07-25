@@ -1,0 +1,19 @@
+version: 2
+registries:
+  npm-tradeshift:
+    type: npm-registry
+    url: 'https://npm.pkg.github.com'
+    token: ${{secrets.NPM_READ_TOKEN}}
+updates:
+  - package-ecosystem: "npm"
+    directory: "/totals-calculator-js"
+    registries:
+      - npm-tradeshift
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Tradeshift/docsapi"
