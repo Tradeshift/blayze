@@ -49,7 +49,7 @@ jobs:
           mvn -B compile
       - name: Test
         run: |
-          mvn -B -Dmaven.test.failure.ignore=true install javadoc:javadoc
+          mvn -B test
       - name: Junit report
         if: always()
         uses: tradeshift/actions-junit-report@v2
