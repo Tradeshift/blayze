@@ -44,6 +44,35 @@ Map<String, Double> predictions = model.predict(new Inputs(/*...*/));// e.g. {"s
 
 We use [SemVer](http://semver.org/) for versioning.
 
+## Release a new version
+- [Create a Sonatype account](https://issues.sonatype.org/secure/Signup!default.jspa)
+  - The created username and password will be referred to as `<sonatype_user>` and `<sonatype_pwd`, respectively.
+- Create a Sonatype Jira ticket of type `Publishing Support` requesting access to `com.tradeshift.blayze`.
+It must be approved by an existing user with write access. It can take a couple of days before access is granted.
+- Create a PR that updates the version in `pom.xml` along with the code changes. Merge it to `master` or `v4` 
+once it is approved. 
+- Generate a gpg key: `gpg --gen-key`
+- List gpg keys: `gpg --list-keys`
+- Extract the key id of the previously generated gpg key. It will be referred to as `<gpg_key_id>` from now
+- Encrypt `<sonatype_pwd>` using `mvn --encrypt-password`. The encrypted value is referred to as `<sonatype_pwd_enc>`
+- Create a new server in `~/.m2/settings.xml`
+```
+<settings>
+    <servers>
+        <server>
+            <id>ossrh-blayze</id>
+            <username><sonatype_user></username>
+            <password><sonatype_pwd_enc></password>
+        </server>      
+    </servers>
+</settings>
+```
+- Run `mvn clean deploy -P release -Dgpg.keyname=<gpg_key_id>`
+- For further details, check [Sonatype documentation](https://central.sonatype.org/publish/publish-guide/)
+
+## Backwards compatibility
+We publish security updates for major version `4.x.x` (branch `v4`) as well as `6.x.x` (branch `master`)
+
 ## Authors
 
  * [Rasmus Berg Palm](https://github.com/rasmusbergpalm)
