@@ -64,23 +64,3 @@ jobs:
           client-key: ${{ secrets.MTLS_KEY }}
           token: ${{ secrets.SONAR_TOKEN }}
           host: 'https://sonar.ts.sv'
-      - name: Configure git for tradeshiftci
-        if: ${{ contains(github.ref, 'refs/heads/v4') }}
-        uses: tradeshift/actions-git/configure-from-gpg-key@v1
-        with:
-          gpg-key: ${{ secrets.TRADESHIFTCI_GPG_KEY }}  
-      - name: Release
-        if: ${{ contains(github.ref, 'refs/heads/v4') }}
-        run: |
-          SHOULD_RELEASE=$(git show --quiet --format=oneline | grep '\[maven-release-plugin\] prepare for next development iteration' || echo yes)
-          if [ "${SHOULD_RELEASE}" = "yes" ]; then
-            RELEASE_VERSION=$(mvn -q build-helper:parse-version exec:exec -Dexec.executable=/bin/echo -Dexec.args='-n ${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.incrementalVersion}' --non-recursive)
-            echo "Release version: ${RELEASE_VERSION}"
-            # Next incremental version for new version, This can be changed manually later by some PR if we need a major version bump
-            NEXT_VERSION=$(mvn -q build-helper:parse-version exec:exec -Dexec.executable=/bin/echo -Dexec.args='-n ${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.nextIncrementalVersion}-SNAPSHOT' --non-recursive)
-            echo "Next version: ${NEXT_VERSION}"
-            mvn -B release:prepare release:perform -Dresume=false -Darguments="-DskipTests" -DdevelopmentVersion=${NEXT_VERSION} -DreleaseVersion=${RELEASE_VERSION} -DtagNameFormat=v@{project.version}
-          else
-            echo "Will not release without any new commits"
-            echo ${SHOULD_RELEASE}
-          fi;
