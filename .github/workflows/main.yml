@@ -1,0 +1,66 @@
+name: Main build
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - v4
+
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Enable to trigger a release
+        type: boolean
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+      - uses: tradeshift/setup-git-credentials@v2
+        with:
+          credentials: "https://tradeshiftcicomponents:${{ secrets.GH_TOKEN }}@github.com/"
+      - name: Fetch PR HEAD
+        if: contains(github.ref, 'pull')
+        run: |
+          git fetch origin ${{ github.event.pull_request.head.sha }}
+          git checkout ${{ github.event.pull_request.head.sha }}
+      - uses: actions/cache@v1
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+      - uses: tradeshift/actions-setup-java@v1
+        with:
+          java-version: 11
+          maven-version: '3.6.3'
+          maven-ca-cert-b64: ${{ secrets.MTLS_CACERT }}
+          maven-keystore-p12-b64: ${{ secrets.MAVEN_P12 }}
+          maven-keystore-password: ${{ secrets.MAVEN_P12_PASSWORD }}
+          maven-settings-b64: ${{ secrets.MAVEN_SETTINGS }}
+          maven-security-settings-b64: ${{ secrets.MAVEN_SECURITY }}
+      - name: Compile
+        run: |
+          mvn -B compile
+      - name: Test
+        run: |
+          mvn -B test
+      - name: Junit report
+        if: always()
+        uses: tradeshift/actions-junit-report@v2
+        with:
+          report_paths: 'target/surefire-reports/**/*.xml'
+      - name: SonarQube Scan
+        uses: tradeshift/actions-sonarqube@v2
+        with:
+          scanner: maven
+          ca-cert: ${{ secrets.MTLS_CACERT }}
+          client-cert: ${{ secrets.MTLS_CERT }}
+          client-key: ${{ secrets.MTLS_KEY }}
+          token: ${{ secrets.SONAR_TOKEN }}
+          host: 'https://sonar.ts.sv'
