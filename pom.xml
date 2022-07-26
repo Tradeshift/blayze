@@ -4,7 +4,7 @@
 
     <groupId>com.tradeshift</groupId>
     <artifactId>blayze</artifactId>
-    <version>4.2.2-SNAPSHOT</version>
+    <version>4.2.2</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -47,7 +47,7 @@
         <connection>scm:git:git@github.com:Tradeshift/blayze.git</connection>
         <developerConnection>scm:git:git@github.com:Tradeshift/blayze.git</developerConnection>
         <url>https://github.com/Tradeshift/blayze/tree/master</url>
-      <tag>HEAD</tag>
+      <tag>v4.2.2</tag>
   </scm>
 
     <distributionManagement>
