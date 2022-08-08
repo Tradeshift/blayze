@@ -35,15 +35,24 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
-      - uses: tradeshift/actions-setup-java@v1
+      - id: setupJava
+        uses: actions/setup-java@v3
         with:
           java-version: 11
-          maven-version: '3.6.3'
-          maven-ca-cert-b64: ${{ secrets.MTLS_CACERT }}
-          maven-keystore-p12-b64: ${{ secrets.MAVEN_P12 }}
-          maven-keystore-password: ${{ secrets.MAVEN_P12_PASSWORD }}
-          maven-settings-b64: ${{ secrets.MAVEN_SETTINGS }}
-          maven-security-settings-b64: ${{ secrets.MAVEN_SECURITY }}
+          distribution: 'zulu'
+      - name: Set up Maven
+        uses: tradeshift/actions-setup-maven@v4.4
+        with:
+          maven-version: 3.6.3
+      - name: Configure maven
+        uses: tradeshift/actions-setup-java-mtls@v1
+        with:
+          java-version: "${{ steps.setupJava.outputs.version }}"
+          maven-settings: ${{ secrets.MAVEN_SETTINGS }}
+          maven-security: ${{ secrets.MAVEN_SECURITY }}
+          maven-p12: ${{ secrets.MAVEN_P12 }}
+          maven-p12-password: ${{ secrets.MAVEN_P12_PASSWORD }}
+          mtls-cacert: ${{ secrets.MTLS_CACERT }}
       - name: Compile
         run: |
           mvn -B compile
