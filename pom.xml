@@ -81,7 +81,7 @@
             <!-- For serialization -->
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
-            <version>3.21.1</version>
+            <version>3.21.12</version>
         </dependency>
         <dependency>
             <!-- For exotic math -->
