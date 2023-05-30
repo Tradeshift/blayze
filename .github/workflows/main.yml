@@ -61,7 +61,7 @@ jobs:
           mvn -B test
       - name: Junit report
         if: always()
-        uses: tradeshift/actions-junit-report@v2
+        uses: tradeshift/actions-junit-report@v3
         with:
           report_paths: 'target/surefire-reports/**/*.xml'
       - name: SonarQube Scan
