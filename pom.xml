@@ -11,7 +11,7 @@
 
     <properties>
         <kotlin.version>2.0.0</kotlin.version>
-        <mockk.version>1.13.11</mockk.version>
+        <mockk.version>1.13.12</mockk.version>
         <gpg.keyname>override-with-local-gpg-key-id</gpg.keyname>
     </properties>
 
