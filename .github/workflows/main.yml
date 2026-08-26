@@ -65,7 +65,7 @@ jobs:
         with:
           report_paths: 'target/surefire-reports/**/*.xml'
       - name: SonarQube Scan
-        uses: tradeshift/actions-sonarqube@v2
+        uses: tradeshift/actions-sonarqube@master
         with:
           scanner: maven
           ca-cert: ${{ secrets.MTLS_CACERT }}
