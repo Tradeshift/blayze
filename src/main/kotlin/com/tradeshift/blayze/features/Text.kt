@@ -40,7 +40,7 @@ class Text(val delegate: Multinomial = Multinomial()) : Feature<Text, FeatureVal
 
     object WordCounter {
         fun countWords(q: String): Counter<String> {
-            val words = q.toLowerCase().split(" ").filter { it.isNotEmpty() }
+            val words = q.lowercase().split(" ").filter { it.isNotEmpty() }
             return Counter(words)
         }
     }
