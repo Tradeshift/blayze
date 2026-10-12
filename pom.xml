@@ -114,6 +114,12 @@
         <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
         <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
         <plugins>
+            <!-- Fix the error: No plugin found for prefix 'sonar' -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>5.7.0.6970</version>
+            </plugin>
             <!-- Generate protobuf classes -->
             <plugin>
                 <groupId>com.github.os72</groupId>
